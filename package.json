@@ -4,6 +4,7 @@
   "description": "Swarm Build worker for offloading builds to another host",
   "main": "index.js",
   "scripts": {
+    "preinstall": "npx npm-force-resolutions",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -18,5 +19,11 @@
     "socket.io": "^3.0.4",
     "socket.io-client": "^3.0.4",
     "sqreen": "^1.64.2"
+  },
+  "resolutions": {
+    "uuid": "8.3.2"
+  },
+  "devDependencies": {
+    "npm-force-resolutions": "^0.0.10"
   }
 }
