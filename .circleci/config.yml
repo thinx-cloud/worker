@@ -3,8 +3,12 @@ version: 2.1
 orbs: 
   docker: circleci/docker@2.0.1
 
+context:
+  - dockerhub
+
 workflows:
   build-docker-image-only:
     jobs:
+      - docker/check
       - docker/publish:
           image: thinxcloud/worker
