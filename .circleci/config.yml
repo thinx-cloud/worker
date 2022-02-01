@@ -11,7 +11,7 @@ context:
 workflows:
   build-docker-image-only:
     jobs:
-      - gg-shield/scan:
+      - ggshield/scan:
           name: Scan using Gitguardian shield
           base_revision: << pipeline.git.base_revision >>
           revision: <<pipeline.git.revision>>
