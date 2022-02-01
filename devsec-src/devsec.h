@@ -45,7 +45,7 @@ class DevSec {
 
   private:
 
-    DevSec sec;
+    DevSec * sec;
 
     bool dsig_created;
     bool dsig_valid;
