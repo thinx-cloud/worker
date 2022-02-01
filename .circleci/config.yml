@@ -4,10 +4,6 @@ orbs:
   docker: circleci/docker@2.0.1
   ggshield: gitguardian/ggshield@1.1.0
 
-context:
-  - dockerhub
-  - gitguardian
-
 workflows:
   build-docker-image-only:
     jobs:
@@ -15,7 +11,11 @@ workflows:
           name: Scan using Gitguardian shield
           base_revision: << pipeline.git.base_revision >>
           revision: <<pipeline.git.revision>>
+          context:
+            - gitguardian
 
       - docker/publish:
           name: Build and Publish to Docker Hub
           image: thinxcloud/worker
+          context:
+            - dockerhub
