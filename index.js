@@ -142,6 +142,7 @@ class Worker {
         console.log("runShell command:", tomes);
         let command = tomes.join(" ");
         
+        // deepcode ignore CommandInjection: this is expected functionality, risk should be accepted.
         let shell = exec.spawn(command, { shell: true }); // lgtm [js/command-line-injection]
         let build_start = new Date().getTime();
 
@@ -199,16 +200,18 @@ class Worker {
             }
 
             // Something must write to build_path/build.log where the file is tailed from to websocket...
-            var build_log_path = path + "/" + build_id + "/build.log"; // lgtm [js/path-injection]
+            var build_log_path = path + "/" + build_id.replace(/\//g, '\\\\') + "/build.log"; // lgtm [js/path-injection]
             fs.ensureFile(build_log_path, function (err) { // lgtm [js/path-injection]
                 if (err) {
                     console.log("» [ERROR] Log file could not be created.");
                 } else {
+                    // deepcode ignore PT: it's expected to be allowed to limit access
                     fs.fchmodSync(fs.openSync(build_log_path), 0o665); // lgtm [js/path-injection]
                     chmodr(path + "/" + build_id, 0o665, (cherr) => {
                         if (cherr) {
                             console.log('Failed to execute chmodr', cherr);
                         } else {
+                            // deepcode ignore PT: the path is internally built
                             fs.appendFileSync(build_log_path, logline); // lgtm [js/path-injection]
                         }
                     });
@@ -222,8 +225,7 @@ class Worker {
         var dstring = "unknown";
 
 		shell.stderr.on("data", (data) => {
-			dstring = data.toString();
-			console.log("ERR [" + build_id + "] »» ", dstring);
+			let dstring = data.toString();
 			if (dstring.indexOf("fatal:") !== -1) {
                 this.running = false;
                 socket.emit('job-status', {
