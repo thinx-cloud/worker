@@ -76,6 +76,8 @@ void do_it(char *ckey, char* mac, char *fcid, char *ssid, char *pass, int debug)
 
 #endif
 
+  free(sec);
+
 }
 
 int main(int argc, char *argv[])
