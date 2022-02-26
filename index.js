@@ -116,7 +116,7 @@ class Worker {
 
         // Validate using whitelist regex to prevent command injection
         if (!this.isBuildIDValid(build_id)) {
-            console.log("[OID:" + owner + "] [BUILD_FAILED] Owner submitted invalid request...");
+            console.log(`"[OID:${owner}] [BUILD_FAILED] Owner submitted invalid request...`);
             return;
         }
 
@@ -125,7 +125,7 @@ class Worker {
         build_id = build_id.replace(/\\/g, '');
         build_id = build_id.replace(/\//g, '');
 
-        console.log("[OID:" + owner + "] [BUILD_STARTED] Worker started...");
+        console.log(`"[OID:${owner}] [BUILD_STARTED] Worker started...`);
 
         // preprocess
         let tomes = CMD.split(" ");
@@ -239,7 +239,7 @@ class Worker {
 
 		shell.on("exit", (code) => {
 
-            console.log("[OID:" + owner + "] [BUILD_COMPLETED] with code " + code);
+            console.log(`[OID:${owner}] [BUILD_COMPLETED] with code ${code}`);
             this.running = false;
 
             if (code > 0) {
@@ -329,6 +329,7 @@ class Worker {
 // Init phase off-class
 
 let srv = process.env.THINX_SERVER;
+let worker;
 
 if (typeof(srv) === "undefined" || srv === null) {
     console.log("THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.");
@@ -339,5 +340,5 @@ if (typeof(srv) === "undefined" || srv === null) {
         srv = "http://" + srv;
     }
     console.log(new Date().getTime(), "» Starting build worker against", srv);
-    const worker = new Worker(srv);
+    worker = new Worker(srv);
 }
