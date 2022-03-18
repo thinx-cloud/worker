@@ -13,6 +13,8 @@ workflows:
           revision: <<pipeline.git.revision>>
           context:
             - gitguardian
+          filter: 
+            - main
 
       - docker/publish:
           name: Build and Publish to Docker Hub
