@@ -347,6 +347,7 @@ if (typeof(srv) === "undefined" || srv === null) {
         // in test environment there is a test worker running on additional port 3001 as well...
         console.log(`Caught exception ${e}`);
         let srv2 = srv1.replace(":3000", ":3001");
+        // eslint-disable-next-line no-unused-vars
         worker = new Worker(srv2);
     }
 }
