@@ -4,7 +4,7 @@ if (typeof(process.env.SQREEN_TOKEN) !== "undefined") {
 
 if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
     var Rollbar = require('rollbar');
-    const rb = new Rollbar({
+    new Rollbar({
         accessToken: process.env.ROLLBAR_TOKEN,
         handleUncaughtExceptions: true,
         handleUnhandledRejections: true
@@ -21,7 +21,7 @@ class Worker {
     constructor(build_server) {
         this.client_id = null;
         this.socket = io(build_server);
-        console.log(new Date().getTime(), `» -= THiNX Cloud Build Worker ${version} =-`);
+        console.log(`${new Date().getTime()} -= THiNX Cloud Build Worker ${version} =-`);
         this.setupSocket(this.socket);
         this.socket_id = null;
         this.running = false;
@@ -48,11 +48,11 @@ class Worker {
 
         let command = job.cmd;
         if (command.indexOf(";") !== -1) {
-            console.log(new Date().getTime(), "Remote command contains unexpected character `;`; this security incident should be reported.");
+            console.log(`${new Date().getTime()} Remote command contains unexpected character ';'; this security incident should be reported.`);
             return false;
         }
         if (command.indexOf("&") !== -1) {
-            console.log(new Date().getTime(), "Remote command contains unexpected character `&`; this security incident should be reported.");
+            console.log(`${new Date().getTime()} Remote command contains unexpected character '&'; this security incident should be reported.`);
             return false;
         }
 
@@ -72,7 +72,7 @@ class Worker {
                 return false;
             } else {
                 if (job.secret === null) {
-                    console.log("Warning, JOB SECRET NULL! This will be error soon.", job);
+                    console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
                     return false;
                 } else {
                     if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
@@ -89,11 +89,11 @@ class Worker {
     runJob(sock, job) {
 
         if (this.validateJob(sock, job)) {
-            console.log("Setting worker to running...");
+            console.log(`${new Date().getTime()} Setting worker to running...`);
             this.running = true;
             this.runShell(job.cmd, job.owner, job.build_id, job.udid, job.path, sock);
         } else {
-            console.log(new Date().getTime(), "« Job validation failed on this worker. Developer error, or attack attempt. No shell will be run.");
+            console.log(`${new Date().getTime()} [critical] Job validation failed on this worker. Developer error, or attack attempt. No shell will be run.`);
         }
     }
 
@@ -133,13 +133,13 @@ class Worker {
         for (let tome in tomes) {
             if ( (tome.indexOf("--git=") !== -1) || (tome.indexOf("--branch=") !== -1)) {
                 if (!this.isArgumentSafe(tome)) {
-                    console.log("Tome", tome, "invalid, suspected command injection, exiting!");
+                    console.log(`[error] Tome ${tome} invalid, suspected command injection, exiting!`);
                     return;
                 }
             }
         }
 
-        console.log("runShell command:", tomes);
+        console.log(`[info] worker runShell command: ${tomes}`);
         let command = tomes.join(" ");
         
         // deepcode ignore CommandInjection: this is expected functionality, risk should be accepted.
@@ -174,7 +174,7 @@ class Worker {
                         status_object = annotation_json;
                         
                     } catch (e) {
-                        console.log("ERROR: Annotation status in \'", annotation_string, "\' not parsed.");
+                        console.log(`[error] Annotation status in '${annotation_string}' not parsed.`);
                     }
 
                     let elapsed_hr;
@@ -187,7 +187,7 @@ class Worker {
                         elapsed_hr = minutes + " minutes " + seconds + " seconds";
                     }
 
-                    console.log("BUILD TIME:", elapsed_hr);
+                    console.log(`[info] BUILD TIME: ${elapsed_hr}`);
 
                     status_object.elapsed = build_time;
                     status_object.elapsed_hr = elapsed_hr;
@@ -203,13 +203,13 @@ class Worker {
             var build_log_path = path + "/" + build_id.replace(/\//g, '\\\\') + "/build.log"; // lgtm [js/path-injection]
             fs.ensureFile(build_log_path, function (err) { // lgtm [js/path-injection]
                 if (err) {
-                    console.log("» [ERROR] Log file could not be created.");
+                    console.log(`[error] Log file could not be created: ${err}`);
                 } else {
                     // deepcode ignore PT: it's expected to be allowed to limit access
                     fs.fchmodSync(fs.openSync(build_log_path), 0o665); // lgtm [js/path-injection]
                     chmodr(path + "/" + build_id, 0o665, (cherr) => {
                         if (cherr) {
-                            console.log('Failed to execute chmodr', cherr);
+                            console.log(`[error] Failed to execute chmodr ${cherr}`);
                         } else {
                             // deepcode ignore PT: the path is internally built
                             fs.appendFileSync(build_log_path, logline); // lgtm [js/path-injection]
@@ -225,14 +225,14 @@ class Worker {
         var dstring = "unknown";
 
 		shell.stderr.on("data", (data) => {
-			let dstring = data.toString();
-			if (dstring.indexOf("fatal:") !== -1) {
+			let ddstring = data.toString();
+			if (ddstring.indexOf("fatal:") !== -1) {
                 this.running = false;
                 socket.emit('job-status', {
                     udid: udid,
                     build_id: build_id, 
                     state: "Failed",
-                    reason: dstring
+                    reason: ddstring
                 });
 			}
 		}); // end shell on error data
@@ -257,7 +257,7 @@ class Worker {
 		}); // end shell on exit
 	}
 
-    setupSocket(socket) {
+    setupSocket(socket) {
         
         // Connectivity Events
 
@@ -266,7 +266,7 @@ class Worker {
         });
 
         socket.on('disconnect', () => { 
-            console.log(new Date().getTime(), "» Worker socket disconnected.");
+            console.log(`${new Date().getTime()} » Worker socket disconnected.`);
         });
 
         // either by directly modifying the `auth` attribute
@@ -274,7 +274,7 @@ class Worker {
             if ((typeof(process.env.WORKER_SECRET) !== "undefined")) {
                 if (typeof(socket.auth) !== "undefined") {
                     socket.auth.token = process.env.WORKER_SECRET;
-                    console.log(new Date().getTime(), "connect_error attempt to resolve using WORKER_SECRET");
+                    console.log(`${new Date().getTime()} connect_error attempt to resolve using WORKER_SECRET`);
                 }
                 setTimeout(function(){
                     socket.connect();
@@ -286,21 +286,21 @@ class Worker {
 
         socket.on('client id', (data) => { 
             if (this.client_id === null) {
-                console.log(new Date().getTime(), `» Worker received initial client id: ${data}`);
+                console.log(`${new Date().getTime()} » Worker received initial client id: ${data}`);
             } else {
-                console.log(new Date().getTime(), `» Worker re-assigned a new client id: ${data}`);
+                console.log(`${new Date().getTime()} » Worker re-assigned a new client id: ${data}`);
             }
             this.client_id = data;
         });
 
         socket.on('job', (data) => { 
             if (this.running == true) {
-                console.log("[!!!] This worker is already running... passing job", data);
+                console.log(`${new Date().getTime()} This worker is already running... passing job ${data}`);
                 return;
             }
             // Prevent path traversal by rejecting insane values
             if (typeof(job.path) !== "undefined" && job.path.indexOf("..") !== -1) {
-                console.log("Invalid path (no path traversal allowed).");
+                console.log(`${new Date().getTime()} [error] Invalid path (no path traversal allowed).`);
                 return;
             }
             console.log(new Date().getTime(), `» Worker has new job:`, data);
@@ -308,9 +308,9 @@ class Worker {
                 this.client_id = data;
                 this.runJob(socket, data);
                 this.running = false;
-                console.log(new Date().getTime(), "» Job synchronously completed.");
+                console.log(`${new Date().getTime()} [info] » Job synchronously completed.`);
             } else {
-                console.log(new Date().getTime(), "» This is a MOCK job!");
+                console.log(`${new Date().getTime()} [info] » This is a MOCK job`);
                 this.runJob(socket, data);
                 this.running = false;
             }
@@ -321,7 +321,7 @@ class Worker {
         if (!this.running) {
             this.socket.emit('poll', 'true');
         } else {
-            console.log(new Date().getTime(), "» Skipping poll cron (job still running and did not timed out).");
+            console.log(`${new Date().getTime()} [info] » Skipping poll cron (job still running and did not timed out).`);
         }
     }
 }
@@ -329,16 +329,24 @@ class Worker {
 // Init phase off-class
 
 let srv = process.env.THINX_SERVER;
-let worker;
+let worker = null;
 
 if (typeof(srv) === "undefined" || srv === null) {
-    console.log("THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.");
+    console.log(`${new Date().getTime()} [critical] THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.`);
     process.exit(1);
 } else {
     // fix missing http if defined in env file just like api:3000
     if (srv.indexOf("http") == -1) {
         srv = "http://" + srv;
     }
-    console.log(new Date().getTime(), "» Starting build worker against", srv);
-    worker = new Worker(srv);
+    console.log(`${new Date().getTime()} [info] » Starting build worker against ${srv}`);
+
+    try {
+        worker = new Worker(srv);
+    } catch (e) {
+        // in test environment there is a test worker running on additional port 3001 as well...
+        console.log(`Caught exception ${e}`);
+        let srv2 = srv1.replace(":3000", ":3001");
+        worker = new Worker(srv2);
+    }
 }
