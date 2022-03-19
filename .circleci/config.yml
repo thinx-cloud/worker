@@ -40,8 +40,10 @@ workflows:
           name: gitguardian
           context:
             - gitguardian
-          filter:
-            - main
+          filters:
+            branches:
+              only:
+                - main
 
       - docker/publish:
           name: build and publish
