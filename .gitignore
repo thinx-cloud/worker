@@ -1,4 +1,6 @@
+coverage/
 node_modules/
 package-lock.json
-test-private.sh
+test-report.xml
 .vscode
+.dccache

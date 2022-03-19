@@ -1,28 +1,20 @@
-if (typeof(process.env.SQREEN_TOKEN) !== "undefined") {
-    require('sqreen');
-}
-
-if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
-    var Rollbar = require('rollbar');
-    new Rollbar({
-        accessToken: process.env.ROLLBAR_TOKEN,
-        handleUncaughtExceptions: true,
-        handleUnhandledRejections: true
-    });
-}
-
 const exec = require("child_process");
 const version = require('./package.json').version;
 const io = require('socket.io-client');
 const fs = require("fs-extra");
 const chmodr = require('chmodr');
-class Worker {
+const { executionAsyncId } = require("async_hooks");
+const { exit } = require("process");
+
+module.exports = class Worker {
 
     constructor(build_server) {
+        console.log(`${new Date().getTime()} -= THiNX Cloud Build Worker ${version} =-`);        
         this.client_id = null;
         this.socket = io(build_server);
-        console.log(`${new Date().getTime()} -= THiNX Cloud Build Worker ${version} =-`);
+        console.log(`${new Date().getTime()} setting up socket...`);        
         this.setupSocket(this.socket);
+        console.log(`${new Date().getTime()} socket setup completed...`);        
         this.socket_id = null;
         this.running = false;
     }
@@ -108,7 +100,7 @@ class Worker {
         return pattern.test(CMD);
     }
 
-    runShell(CMD, owner, build_id, udid, path, socket) {
+    runShell(CMD, owner, build_id, udid, path, socket, exit_callback) {
 
         // Prevent injection through git, branch
 
@@ -251,6 +243,12 @@ class Worker {
                 });
             }
 
+            // exit_callback is only in test
+            if (typeof(exit_callback) !== "undefined") {
+                exit_callback();
+                return;
+            }
+
             const close_underlying_connection = true; // should be true, having it false does not help failing builds
             socket.disconnect(close_underlying_connection);
             
@@ -298,7 +296,7 @@ class Worker {
                 console.log(`${new Date().getTime()} This worker is already running... passing job ${data}`);
                 return;
             }
-            // Prevent path traversal by rejecting insane values
+            // Prevent path traversal by rejecting insane values (WTF?)
             if (typeof(job.path) !== "undefined" && job.path.indexOf("..") !== -1) {
                 console.log(`${new Date().getTime()} [error] Invalid path (no path traversal allowed).`);
                 return;
@@ -324,30 +322,8 @@ class Worker {
             console.log(`${new Date().getTime()} [info] » Skipping poll cron (job still running and did not timed out).`);
         }
     }
-}
 
-// Init phase off-class
-
-let srv = process.env.THINX_SERVER;
-let worker = null;
-
-if (typeof(srv) === "undefined" || srv === null) {
-    console.log(`${new Date().getTime()} [critical] THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.`);
-    process.exit(1);
-} else {
-    // fix missing http if defined in env file just like api:3000
-    if (srv.indexOf("http") == -1) {
-        srv = "http://" + srv;
-    }
-    console.log(`${new Date().getTime()} [info] » Starting build worker against ${srv}`);
-
-    try {
-        worker = new Worker(srv);
-    } catch (e) {
-        // in test environment there is a test worker running on additional port 3001 as well...
-        console.log(`Caught exception ${e}`);
-        let srv2 = srv1.replace(":3000", ":3001");
-        // eslint-disable-next-line no-unused-vars
-        worker = new Worker(srv2);
+    close() {
+        this.socket.close();
     }
 }

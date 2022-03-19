@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testExecutions version="1">
+  <file path="/Users/sychram/Repositories/thinx-device-api/services/worker/test.js">
+    <testCase name="Worker mandatory configuration must be set" duration="34"/>
+  </file>
+</testExecutions>

@@ -93,4 +93,4 @@ RUN chmod +x ./devsec
 # Open the mapped port
 EXPOSE 3000
 
-CMD [ "node", "index.js" ]
+CMD [ "node", "worker.js" ]
