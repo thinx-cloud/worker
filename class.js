@@ -84,6 +84,13 @@ module.exports = class Worker {
             console.log(`${new Date().getTime()} Setting worker to running...`);
             this.running = true;
             this.runShell(job.cmd, job.owner, job.build_id, job.udid, job.path, sock);
+            setTimeout( () => {
+                if (this.running) {
+                    console.log("[error] worker timed out after 1h, stopping.");
+                    this.running = false;
+                    this.failJob(sock, job, "worker_time_out");
+                }
+            }, 3600 * 1000);
         } else {
             console.log(`${new Date().getTime()} [critical] Job validation failed on this worker. Developer error, or attack attempt. No shell will be run.`);
         }
