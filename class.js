@@ -138,7 +138,7 @@ module.exports = class Worker {
             }
         }
 
-        console.log(`[info] worker runShell command: ${tomes}`);
+        console.log(`ℹ️ [info] worker runShell command: ${tomes}`);
         let command = tomes.join(" ");
         
         // deepcode ignore CommandInjection: this is expected functionality, risk should be accepted.
@@ -186,7 +186,7 @@ module.exports = class Worker {
                         elapsed_hr = minutes + " minutes " + seconds + " seconds";
                     }
 
-                    console.log(`[info] BUILD TIME: ${elapsed_hr}`);
+                    console.log(`ℹ️ [info] BUILD TIME: ${elapsed_hr}`);
 
                     status_object.elapsed = build_time;
                     status_object.elapsed_hr = elapsed_hr;
