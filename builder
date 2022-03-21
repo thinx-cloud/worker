@@ -893,7 +893,7 @@ case $PLATFORM in
 
 			if [[ -f ${WORKDIR}/firmware.bin ]]; then
 				BUILD_SUCCESS=true
-				# TODO: FIXME, can be more binfiles with partitions!
+				# TODO: can be more binfiles with partitions!
 				BIN_FILE=$( find $BUILD_PATH/$REPO_NAME -name "*.bin" | head -n 1)
 				echo "BIN_FILE: ${BIN_FILE}" | tee -a "${LOG_PATH}"
 
@@ -998,7 +998,7 @@ case $PLATFORM in
 
 			if [[ ! -z $(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH}) ]]; then
 				BUILD_SUCCESS=true
-				# TODO: FIXME, can be more binfiles with partitions!
+				# TODO: can be more binfiles with partitions!
 				BIN_FILE=$( find $BUILD_PATH/$REPO_NAME -name "*.bin" | head -n 1)
 				echo "BIN_FILE: ${BIN_FILE}" | tee -a "${LOG_PATH}"
 

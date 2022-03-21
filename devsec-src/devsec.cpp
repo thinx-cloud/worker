@@ -182,7 +182,7 @@ bool DevSec::validate_signature(char * signature, char * ckey) {
 
 /* Performs simple symetric XOR encryption using static CKEY so does not work with strings well */
 
-// TODO: FIXME: use pass-by-reference to get rid of internal buffer leak
+// FIXME: use pass-by-reference to get rid of internal buffer leak
 char * DevSec::encrypt(uint8_t input[]) {
     if (strlen((char*)input) > 255) {
       printf("ERROR: Block too long!");
@@ -201,7 +201,7 @@ char * DevSec::encrypt(uint8_t input[]) {
     return (char*) this->crypted;
 }
 
-// TODO: FIXME: use pass-by-reference to get rid of internal buffer leak
+// FIXME: use pass-by-reference to get rid of internal buffer leak
 char * DevSec::decrypt(uint8_t input[]) {
     if (strlen((char*)input) > 255) {
       printf("ERROR: Block too long!");
