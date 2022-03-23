@@ -3,8 +3,6 @@ const version = require('./package.json').version;
 const io = require('socket.io-client');
 const fs = require("fs-extra");
 const chmodr = require('chmodr');
-const { executionAsyncId } = require("async_hooks");
-const { exit } = require("process");
 
 module.exports = class Worker {
 
@@ -333,4 +331,4 @@ module.exports = class Worker {
     close() {
         this.socket.close();
     }
-}
+};
