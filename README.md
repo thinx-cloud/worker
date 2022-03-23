@@ -14,7 +14,7 @@ Use the `WORKER_SECRET` variable on boths sides (API/Worker) to make sure worker
 
 | Name.                   | Usage.                                          |
 |:------------------------|:------------------------------------------------|
-| `THINX_SERVER`          | Build Server URL, defaults to localhost:3000    |
+| `THINX_SERVER`          | Build Server URL, defaults to https://api:3000  |
 | `SQREEN_TOKEN`          | Authentication token for Sqreen.io (optional)   |
 | `ROLLBAR_ACCESS_TOKEN`  | Authentication token for Rollbar (optional)     |
 | `ROLLBAR_ENVIRONMENT`   | Enviroment for Rollbar (required if token set)  |

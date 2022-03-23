@@ -22,10 +22,7 @@ if (typeof(srv) === "undefined" || srv === null) {
     console.log(`${new Date().getTime()} [critical] THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.`);
     process.exit(1);
 } else {
-    // fix missing http if defined in env file just like api:3000
-    if (srv.indexOf("http") == -1) {
-        srv = "http://" + srv;
-    }
+    
     console.log(`${new Date().getTime()} [info] » Starting build worker against ${srv}`);
 
     try {
