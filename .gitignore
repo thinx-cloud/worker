@@ -4,3 +4,5 @@ package-lock.json
 test-report.xml
 .vscode
 .dccache
+.scannerwork
+
