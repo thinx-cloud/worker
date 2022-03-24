@@ -1,18 +1,35 @@
+if (typeof(process.env.SQREEN_TOKEN) !== "undefined") {
+    require('sqreen');
+}
+
+if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
+    var Rollbar = require('rollbar');
+    new Rollbar({
+        accessToken: process.env.ROLLBAR_TOKEN,
+        handleUncaughtExceptions: true,
+        handleUnhandledRejections: true
+    });
+}
+
 const exec = require("child_process");
 const version = require('./package.json').version;
 const io = require('socket.io-client');
 const fs = require("fs-extra");
 const chmodr = require('chmodr');
-
-module.exports = class Worker {
+class Worker {
 
     constructor(build_server) {
-        console.log(`${new Date().getTime()} -= THiNX Cloud Build Worker ${version} =-`);        
         this.client_id = null;
-        this.socket = io(build_server);
-        console.log(`${new Date().getTime()} setting up socket...`);        
+        this.socket = io(
+            build_server,
+            {
+                transports: ['websocket'],
+                rejectUnauthorized: false // because the certificate on other side has different CNAME than 'api'; sufficient for internal communication
+            }
+        );
+
+        console.log(`${new Date().getTime()} -= THiNX Cloud Build Worker ${version} =-`);
         this.setupSocket(this.socket);
-        console.log(`${new Date().getTime()} socket setup completed...`);        
         this.socket_id = null;
         this.running = false;
     }
@@ -56,21 +73,22 @@ module.exports = class Worker {
             return false;
         }
 
-        if ((typeof(process.env.WORKER_SECRET) === "undefined") || (process.env.WORKER_SECRET === null))  {
+        if (typeof(process.env.WORKER_SECRET) !== "undefined") {
             if (typeof(job.secret) === "undefined") {
                 this.failJob(sock, job, "Missing job secret");
                 return false;
-            } 
-            if (job.secret === null) {
-                console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
-                return false;
-            } 
+            } else {
+                if (job.secret === null) {
+                    console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
+                    return false;
+                } else {
+                    if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
+                        this.failJob(sock, job, "Invalid job authentication");
+                        return false;
+                    } 
+                }
+            }
         }
-
-        if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
-            this.failJob(sock, job, "Invalid job authentication");
-            return false;
-        } 
 
         return true;
     }
@@ -81,13 +99,6 @@ module.exports = class Worker {
             console.log(`${new Date().getTime()} Setting worker to running...`);
             this.running = true;
             this.runShell(job.cmd, job.owner, job.build_id, job.udid, job.path, sock);
-            setTimeout( () => {
-                if (this.running) {
-                    console.log("[error] worker timed out after 1h, stopping.");
-                    this.running = false;
-                    this.failJob(sock, job, "worker_time_out");
-                }
-            }, 3600 * 1000);
         } else {
             console.log(`${new Date().getTime()} [critical] Job validation failed on this worker. Developer error, or attack attempt. No shell will be run.`);
         }
@@ -95,16 +106,16 @@ module.exports = class Worker {
 
     isBuildIDValid(build_id) {
         // build id may include [:alnum:] and - only
-        var pattern = /^([a-zA-Z0-9-]+)$/;
+        var pattern = new RegExp(/^([a-zA-Z0-9-]+)$/);
         return (pattern.test(build_id));
     }
 
     isArgumentSafe(CMD) {
-        var pattern = /(?![;&]+)/;
+        var pattern = new RegExp("(?![;&]+)");
         return pattern.test(CMD);
     }
 
-    runShell(CMD, owner, build_id, udid, path, socket, exit_callback) {
+    runShell(CMD, owner, build_id, udid, path, socket) {
 
         // Prevent injection through git, branch
 
@@ -135,7 +146,7 @@ module.exports = class Worker {
             }
         }
 
-        console.log(`ℹ️ [info] worker runShell command: ${tomes}`);
+        console.log(`[info] worker runShell command: ${tomes}`);
         let command = tomes.join(" ");
         
         // deepcode ignore CommandInjection: this is expected functionality, risk should be accepted.
@@ -183,7 +194,7 @@ module.exports = class Worker {
                         elapsed_hr = minutes + " minutes " + seconds + " seconds";
                     }
 
-                    console.log(`ℹ️ [info] BUILD TIME: ${elapsed_hr}`);
+                    console.log(`[info] BUILD TIME: ${elapsed_hr}`);
 
                     status_object.elapsed = build_time;
                     status_object.elapsed_hr = elapsed_hr;
@@ -247,12 +258,6 @@ module.exports = class Worker {
                 });
             }
 
-            // exit_callback is only in test
-            if (typeof(exit_callback) !== "undefined") {
-                exit_callback();
-                return;
-            }
-
             const close_underlying_connection = true; // should be true, having it false does not help failing builds
             socket.disconnect(close_underlying_connection);
             
@@ -296,11 +301,11 @@ module.exports = class Worker {
         });
 
         socket.on('job', (data) => { 
-            if (this.running) {
+            if (this.running == true) {
                 console.log(`${new Date().getTime()} This worker is already running... passing job ${data}`);
                 return;
             }
-            // Prevent path traversal by rejecting insane values (WTF?)
+            // Prevent path traversal by rejecting insane values
             if (typeof(job.path) !== "undefined" && job.path.indexOf("..") !== -1) {
                 console.log(`${new Date().getTime()} [error] Invalid path (no path traversal allowed).`);
                 return;
@@ -326,8 +331,30 @@ module.exports = class Worker {
             console.log(`${new Date().getTime()} [info] » Skipping poll cron (job still running and did not timed out).`);
         }
     }
+}
 
-    close() {
-        this.socket.close();
+// Init phase off-class
+
+let srv = process.env.THINX_SERVER;
+let worker = null;
+
+if (typeof(srv) === "undefined" || srv === null) {
+    console.log(`${new Date().getTime()} [critical] THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.`);
+    process.exit(1);
+} else {
+    // fix missing http if defined in env file just like api:3000
+    if (srv.indexOf("http") == -1) {
+        srv = "http://" + srv;
     }
-};
+    console.log(`${new Date().getTime()} [info] » Starting build worker against ${srv}`);
+
+    try {
+        worker = new Worker(srv);
+    } catch (e) {
+        // in test environment there is a test worker running on additional port 3001 as well...
+        console.log(`Caught exception ${e}`);
+        let srv2 = srv1.replace(":3000", ":3001");
+        // eslint-disable-next-line no-unused-vars
+        worker = new Worker(srv2);
+    }
+}
