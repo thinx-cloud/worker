@@ -20,7 +20,14 @@ class Worker {
 
     constructor(build_server) {
         this.client_id = null;
-        this.socket = io(build_server);
+        this.socket = io(
+            build_server,
+            {
+                transports: ['websocket'],
+                rejectUnauthorized: false // because the certificate on other side has different CNAME than 'api'; sufficient for internal communication
+            }
+        );
+
         console.log(`${new Date().getTime()} -= THiNX Cloud Build Worker ${version} =-`);
         this.setupSocket(this.socket);
         this.socket_id = null;
