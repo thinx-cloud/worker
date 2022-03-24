@@ -56,22 +56,21 @@ module.exports = class Worker {
             return false;
         }
 
-        if (typeof(process.env.WORKER_SECRET) !== "undefined") {
+        if ((typeof(process.env.WORKER_SECRET) === "undefined") || (process.env.WORKER_SECRET === null))  {
             if (typeof(job.secret) === "undefined") {
                 this.failJob(sock, job, "Missing job secret");
                 return false;
-            } else {
-                if (job.secret === null) {
-                    console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
-                    return false;
-                } else {
-                    if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
-                        this.failJob(sock, job, "Invalid job authentication");
-                        return false;
-                    } 
-                }
-            }
+            } 
+            if (job.secret === null) {
+                console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
+                return false;
+            } 
         }
+
+        if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
+            this.failJob(sock, job, "Invalid job authentication");
+            return false;
+        } 
 
         return true;
     }
@@ -96,12 +95,12 @@ module.exports = class Worker {
 
     isBuildIDValid(build_id) {
         // build id may include [:alnum:] and - only
-        var pattern = new RegExp(/^([a-zA-Z0-9-]+)$/);
+        var pattern = /^([a-zA-Z0-9-]+)$/;
         return (pattern.test(build_id));
     }
 
     isArgumentSafe(CMD) {
-        var pattern = new RegExp("(?![;&]+)");
+        var pattern = /(?![;&]+)/;
         return pattern.test(CMD);
     }
 
@@ -297,7 +296,7 @@ module.exports = class Worker {
         });
 
         socket.on('job', (data) => { 
-            if (this.running == true) {
+            if (this.running) {
                 console.log(`${new Date().getTime()} This worker is already running... passing job ${data}`);
                 return;
             }
