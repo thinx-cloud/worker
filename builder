@@ -54,6 +54,11 @@ swarm-build()
 		COUNTRY=cz
 	fi
 
+	# nodemcu container has different startup command (build)
+	if [[ ! -z $(echo $BUILD_IMAGE | grep nodemcu) ]];
+		BUILD_IMAGE="$BUILD_IMAGE build"
+	fi
+
 	# Restores internal to external mount path for service outside this container
 	FIND="\/mnt\/data\/repos"
 	REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/repos"
@@ -747,7 +752,7 @@ case $PLATFORM in
 					echo "running Docker >>>"
 					set -o pipefail
 					docker pull suculent/nodemcu-docker-build
-					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t ${DOCKER_PARAMS} -v `pwd`:/opt/nodemcu-firmware suculent/nodemcu-docker-build | tee -a "${LOG_PATH}"
+					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t ${DOCKER_PARAMS} -v `pwd`:/opt/nodemcu-firmware suculent/nodemcu-docker-build build | tee -a "${LOG_PATH}"
 					echo "${PIPESTATUS[@]}"
 					if [[ ! -z $(cat ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ; then
 						BUILD_SUCCESS=true
@@ -755,7 +760,7 @@ case $PLATFORM in
 					fi
 					echo "[nodemcu] Docker completed <<<"
 				else
-					swarm-build $WORKDIR suculent/micropython-docker-build $LOG_PATH
+					swarm-build $WORKDIR suculent/nodemcu-docker-build $LOG_PATH
 				fi
 				
 			else
