@@ -1,5 +1,7 @@
+let s;
+
 if (typeof(process.env.SQREEN_TOKEN) !== "undefined") {
-    require('sqreen');
+    s = require('sqreen');
 }
 
 let r;
@@ -24,24 +26,9 @@ if (typeof(srv) === "undefined" || srv === null) {
     console.log(`${new Date().getTime()} [critical] THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.`);
     process.exit(1);
 } else {
-    // fix missing http if defined in env file just like api:3000
-    if (srv.indexOf("http://") == -1) {
-        srv = "http://" + srv;
-    }
-    if (srv.indexOf("https://") == -1) {
-        srv = "https://" + srv;
-    }
     console.log(`${new Date().getTime()} [info] » Starting build worker against ${srv}`);
 
-    try {
-        worker = new Worker(srv);
-    } catch (e) {
-        // in test environment there is a test worker running on additional port 3001 as well...
-        console.log(`Caught exception ${e}`);
-        srv = srv.replace(":3000", ":3001");
-        // eslint-disable-next-line no-unused-vars
-        worker = new Worker(srv);
-    }
+    worker = new Worker(srv);
 
     r.info(["Worker started with server"+srv]);
 }
