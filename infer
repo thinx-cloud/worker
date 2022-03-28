@@ -178,6 +178,7 @@ function generate_thinx_file
 
 function thinx_file_from_json
 {
+		local BFILE=$1
 		local WORKDIR=$3
 		local LANG_PATH="$THINX_ROOT/languages/$2/descriptor.json"
 		local LANG=$(cat $LANG_PATH)
@@ -196,7 +197,7 @@ function thinx_file_from_json
     fi
 
 		OUTFILE=$(output_file $PLATFORM)
-		BUILDFILE="$(cat $1)"
+		BUILDFILE="$(cat $BFILE)"
 		PLATFORM=$(infer_platform $WORKDIR)
 
 		# for JavaScript will just provide the JSON as-is...
