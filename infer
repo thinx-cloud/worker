@@ -50,6 +50,12 @@ function infer_platform
 				fi
 		done
 
+		# Pine64 (Makefile, will collide with other platforms later, like esp-idf); will be overwritten by platformio
+
+		if [[ -f "$path/Makefile" ]]; then
+			platform="pine64"
+		fi
+
 		# Platform.io (will be overwritten with Arduino in case of ino files!)
 
 		if [[ -f $path/platformio.ini ]]; then
@@ -73,11 +79,6 @@ function infer_platform
 
 		elif [[ -f "$path/init.lua" ]]; then
 			platform="nodemcu"
-
-		# Pine64 (Makefile, will collide with other platforms later, like esp-idf)
-
-		elif [[ -f "$path/Makefile" ]]; then
-			platform="pine64"
 
 		# Micropython
 
@@ -112,8 +113,6 @@ function infer_platform
 			if [[ ! -z $nodejs ]]; then
 				platform = "nodejs"
 			fi
-		else
-			echo "thinx.yml not found at $YMLFILE"
 		fi
 
 		echo $platform
@@ -152,15 +151,13 @@ function generate_thinx_file
 	LANGUAGE=$(language_for_platform $PLATFORM)
 	LANGUAGE_NAME=$(language_name $LANGUAGE)
 
-  # echo "[infer] Inferred platform: ${PLATFORM}"
-
 	if [[ -z ${BUILDFILE} ]]; then
 		echo "BUILDFILE not specified."
 		exit 3
 	fi
 
 	if [[ -z ${LANGUAGE} ]]; then
-		echo "LANGUAGE not inferred correctly."
+		echo "LANGUAGE not inferred correctly with platform $PLATFORM $PLATFORM_NAME"
 		exit 3
 	fi
 
@@ -191,10 +188,10 @@ function thinx_file_from_json
 		local STRINGSTOP=$(echo $LANG | jq .STRINGSTOP | tr -d '\\' 2> /dev/null)
 		STRINGSTOP=$(echo "${STRINGSTOP:1:${#STRINGSTOP}-2}")
 
-    if [ -z $PLATFORM ]; then
-      echo "Unknown platform."
-      exit 1
-    fi
+		if [ -z $PLATFORM ]; then
+		echo "Unknown platform."
+		exit 1
+		fi
 
 		OUTFILE=$(output_file $PLATFORM)
 		BUILDFILE="$(cat $BFILE)"
@@ -265,7 +262,7 @@ function thinx_file_from_json
 					fi
 					if [[ $VALUE == "true" || $VALUE == false ]]; then
 						echo "$DEFINE$K$ASSIGN$VALUE$EOL" >> "$OUTFILE"
-					elif [[ ${VALUE} == ?(-)+([0-9]) ]]; then
+					elif [[ ${VALUE} == [0-9]++ ]]; then
 						echo "$DEFINE$K$ASSIGN$VALUE$EOL" >> "$OUTFILE"
 					else
 						echo "$DEFINE$K$ASSIGN$STRINGSTOP$VALUE$STRINGSTOP$EOL" >> "$OUTFILE"
