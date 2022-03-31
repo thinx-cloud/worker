@@ -89,7 +89,7 @@ module.exports = class Worker {
             this.runShell(job.cmd, job.owner, job.build_id, job.udid, job.path, sock);
             setTimeout(() => {
                 if (this.running) {
-                    console.log("[error] worker timed out after 1h, stopping.");
+                    console.log("☣️ [error] worker timed out after 1h, stopping.");
                     this.running = false;
                     this.failJob(sock, job, "worker_time_out");
                 }
