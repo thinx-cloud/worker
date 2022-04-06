@@ -2,7 +2,7 @@
 
 FROM node:17-alpine
 
-LABEL name="thinxcloud/worker" version="1.5.101"
+LABEL name="thinxcloud/worker" version="1.5.102"
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
 
@@ -90,7 +90,7 @@ RUN chmod +x ./devsec
 # Switch to 'transformer' or 'node' user
 # USER worker problem with rights across containers)
 
-# Open the mapped port
-EXPOSE 3000
+# Open the mapped port DEPRECATED! Remove after testing.
+EXPOSE 4000
 
 CMD [ "node", "worker.js" ]
