@@ -310,7 +310,7 @@ module.exports = class Worker {
                 return;
             }
             // Prevent path traversal by rejecting insane values (WTF?)
-            if (typeof (job.path) !== "undefined" && job.path.indexOf("..") !== -1) {
+            if (typeof (data.path) !== "undefined" && data.path.indexOf("..") !== -1) {
                 console.log(`${new Date().getTime()} [error] Invalid path (no path traversal allowed).`);
                 return;
             }
