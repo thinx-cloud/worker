@@ -13,7 +13,10 @@ module.exports = class Worker {
             build_server,
             {
                 transports: ['websocket'],
-                rejectUnauthorized: false // because the certificate on other side has different CNAME than 'api'; sufficient for internal communication
+                rejectUnauthorized: false, // because the certificate on other side has different CNAME than 'api'; sufficient for internal communication
+                reconnection: true,
+                reconnectionAttempts: 1000,
+                reconnectionDelay: 500
             }
         );
         console.log(`${new Date().getTime()} setting up socket...`);
