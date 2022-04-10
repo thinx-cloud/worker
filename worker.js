@@ -22,6 +22,14 @@ let Worker = require("./class.js");
 let srv = process.env.THINX_SERVER;
 let worker = null;
 
+function exists(x) {
+    if ((typeof(x) === "undefined") || (x === null)) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
 if (typeof(srv) === "undefined" || srv === null) {
     console.log(`${new Date().getTime()} [critical] THINX_SERVER environment variable must be defined in order to build firmware with proper backend binding.`);
     process.exit(1);
@@ -30,5 +38,5 @@ if (typeof(srv) === "undefined" || srv === null) {
 
     worker = new Worker(srv);
 
-    if (r) r.info(["Worker started with server"+srv]);
+    if (exists(r)) r.info(["Worker started with server"+srv]);
 }
