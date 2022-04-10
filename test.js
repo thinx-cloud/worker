@@ -108,8 +108,55 @@ describe("Worker", () => {
         io.emit("client id", "1");
     });
 
-    test('job', () => {
+    test('job (valid)', () => {
         io.emit("job", job);
+    });
+
+    test('job (no-job)', () => {
+        io.emit("job", null);
+    });
+
+    test('job (undef-job)', () => {
+        io.emit("job", undefined);
+    });
+
+    test('job (cmd-with-;)', () => {
+        io.emit("job", {
+            cmd: ";"
+        });
+    });
+
+    test('job (cmd-with-&)', () => {
+        io.emit("job", {
+            cmd: "&"
+        });
+    });
+
+    test('job (cmd-with-ls)', () => {
+        io.emit("job", {
+            cmd: "ls -la"
+        });
+    });
+
+    test('job (cmd-with-null-id)', () => {
+        io.emit("job", {
+            build_id: null
+        });
+    });
+
+    test('job (cmd-with-mock-id)', () => {
+        io.emit("job", {
+            build_id: "mock",
+            cmd: "ls -la"
+        });
+    });
+
+    test('job (cmd-with-mock-udid)', () => {
+        io.emit("job", {
+            build_id: "mock",
+            cmd: "ls -la",
+            udid: "mock"
+        });
     });
 
     test('failJob', () => {

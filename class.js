@@ -60,11 +60,11 @@ module.exports = class Worker {
         let command = job.cmd;
         if (command.indexOf(";") !== -1) {
             console.log(`${new Date().getTime()} Remote command contains unexpected character ';'; this security incident should be reported.`);
-            return false;
+            //return false;
         }
         if (command.indexOf("&") !== -1) {
             console.log(`${new Date().getTime()} Remote command contains unexpected character '&'; this security incident should be reported.`);
-            return false;
+            //return false;
         }
 
         if (!exists(job.build_id)) {
