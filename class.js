@@ -4,6 +4,13 @@ const io = require('socket.io-client');
 const fs = require("fs-extra");
 const chmodr = require('chmodr');
 
+function exists(x) {
+    return ((typeof(x) === "undefined") || (x === null)) ? false : true;
+}
+
+function undef(x) {
+    return !exists(x);
+}
 module.exports = class Worker {
 
     constructor(build_server) {
@@ -40,12 +47,12 @@ module.exports = class Worker {
 
     validateJob(sock, job) {
 
-        if ((typeof (job) === "undefined") || (job === null)) {
+        if (!exists(job)) {
             this.failJob(sock, job, "Missing job");
             return false;
         }
 
-        if (typeof (job.cmd) === "undefined") {
+        if (!exists(job.cmd)) {
             this.failJob(sock, job, "Missing command");
             return false;
         }
@@ -60,7 +67,7 @@ module.exports = class Worker {
             return false;
         }
 
-        if ((typeof (job.build_id) === "undefined") || (job.build_id === null)) {
+        if (!exists(job.build_id)) {
             this.failJob(sock, job, "Missing build_id");
             return false;
         }
@@ -71,17 +78,17 @@ module.exports = class Worker {
         }
 
         if ((typeof (process.env.WORKER_SECRET) === "undefined") || (process.env.WORKER_SECRET === null)) {
-            if (typeof (job.secret) === "undefined") {
+            if (undef(job.secret)) {
                 this.failJob(sock, job, "Missing job secret");
                 return false;
             }
-            if ((typeof(job.secret) === "undefined") || (job.secret === null)) {
+            if (undef(job.secret)) {
                 console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
                 return false;
             }
         }
 
-        if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
+        if (exists(job.secret)) {
             this.failJob(sock, job, "Invalid job authentication");
             return false;
         }
@@ -262,7 +269,7 @@ module.exports = class Worker {
             }
 
             // exit_callback is only in test
-            if (typeof (exit_callback) !== "undefined") {
+            if (exists(exit_callback)) {
                 exit_callback();
                 return;
             }
@@ -288,7 +295,7 @@ module.exports = class Worker {
         // either by directly modifying the `auth` attribute
         socket.on("connect_error", () => {
             if ((typeof (process.env.WORKER_SECRET) !== "undefined")) {
-                if (typeof (socket.auth) !== "undefined") {
+                if (exists(socket.auth)) {
                     socket.auth.token = process.env.WORKER_SECRET;
                     console.log(`${new Date().getTime()} connect_error attempt to resolve using WORKER_SECRET`);
                 }
