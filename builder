@@ -31,7 +31,7 @@ NODE_ID=$(docker info -f {{.Swarm.NodeID}})
 
 SWARM=false
 if [[ -z $NODE_ID ]]; then
-        echo "SWARM ERROR! Make sure /var/run/docker.sock is readable by the worker on this node!"
+        echo "Non swarm mode. Make sure /var/run/docker.sock is readable by the worker on this node in order to run in Swarm mode."
 		SWARM=false
 else
         echo "This is a swarm node ${NODE_ID}"
@@ -1297,3 +1297,6 @@ echo "RESULT: ${RESULT}" | tee -a "${LOG_PATH}"
 MSG=""
 
 fi
+
+#debug only
+cat $LOG_PATH
