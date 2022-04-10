@@ -1,15 +1,15 @@
-let s;
+let s = null;
 
-if (typeof(process.env.SQREEN_TOKEN) !== "undefined") {
+if (typeof(process.env.SQREEN_TOKEN) !== "undefined") && (process.env.SQREEN_TOKEN !== null) {
     s = require('sqreen');
 }
 
-let r;
+let r = null;
 
-if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
+if (typeof(process.env.ROLLBAR_ACCESS_TOKEN) !== "undefined") && (process.env.ROLLBAR_ACCESS_TOKEN !== null) {
     var Rollbar = require('rollbar');
     r = new Rollbar({
-        accessToken: process.env.ROLLBAR_TOKEN,
+        accessToken: process.env.ROLLBAR_ACCESS_TOKEN,
         handleUncaughtExceptions: true,
         handleUnhandledRejections: true
     });
@@ -30,5 +30,5 @@ if (typeof(srv) === "undefined" || srv === null) {
 
     worker = new Worker(srv);
 
-    r.info(["Worker started with server"+srv]);
+    if (r) r.info(["Worker started with server"+srv]);
 }
