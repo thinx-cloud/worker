@@ -40,6 +40,11 @@ module.exports = class Worker {
 
     validateJob(sock, job) {
 
+        if ((typeof (job) === "undefined") || (job === null)) {
+            this.failJob(sock, job, "Missing job");
+            return false;
+        }
+
         if (typeof (job.cmd) === "undefined") {
             this.failJob(sock, job, "Missing command");
             return false;
@@ -55,12 +60,12 @@ module.exports = class Worker {
             return false;
         }
 
-        if (typeof (job.build_id) === "undefined") {
+        if ((typeof (job.build_id) === "undefined") || (job.build_id === null)) {
             this.failJob(sock, job, "Missing build_id");
             return false;
         }
 
-        if (typeof (job.udid) === "undefined") {
+        if ((typeof (job.udid) === "undefined") || (job.udid === null)) { 
             this.failJob(sock, job, "Missing udid");
             return false;
         }
@@ -70,7 +75,7 @@ module.exports = class Worker {
                 this.failJob(sock, job, "Missing job secret");
                 return false;
             }
-            if (job.secret === null) {
+            if ((typeof(job.secret) === "undefined") || (job.secret === null)) {
                 console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
                 return false;
             }
