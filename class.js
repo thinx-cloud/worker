@@ -48,11 +48,13 @@ module.exports = class Worker {
     validateJob(sock, job) {
 
         if (!exists(job)) {
-            this.failJob(sock, job, "Missing job");
+            console.log(`${new Date().getTime()} Missing job.`);
+            this.failJob(sock, job, "Missing job.");
             return false;
         }
 
         if (!exists(job.cmd)) {
+            console.log(`${new Date().getTime()} Missing command.`);
             this.failJob(sock, job, "Missing command");
             return false;
         }
@@ -68,28 +70,20 @@ module.exports = class Worker {
         }
 
         if (!exists(job.build_id)) {
+            console.log(`${new Date().getTime()} Missing build_id.`);
             this.failJob(sock, job, "Missing build_id");
             return false;
         }
 
         if ((typeof (job.udid) === "undefined") || (job.udid === null)) { 
+            console.log(`${new Date().getTime()} Missing udid.`);
             this.failJob(sock, job, "Missing udid");
             return false;
         }
 
-        if ((typeof (process.env.WORKER_SECRET) === "undefined") || (process.env.WORKER_SECRET === null)) {
-            if (undef(job.secret)) {
-                this.failJob(sock, job, "Missing job secret");
-                return false;
-            }
-            if (undef(job.secret)) {
-                console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
-                return false;
-            }
-        }
-
-        if (exists(job.secret)) {
-            this.failJob(sock, job, "Invalid job authentication");
+        if (undef(job.secret)) {
+            console.log(`${new Date().getTime()} Missing job secret.`);
+            this.failJob(sock, job, "Missing job secret");
             return false;
         }
 
