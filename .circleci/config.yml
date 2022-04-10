@@ -50,6 +50,7 @@ workflows:
       - docker/publish:
           name: build and publish
           image: thinxcloud/worker
+          tag: latest
           context:
             - dockerhub
             - sqreen
