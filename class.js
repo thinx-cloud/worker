@@ -284,6 +284,7 @@ module.exports = class Worker {
 
         socket.on('disconnect', () => {
             console.log(`${new Date().getTime()} » Worker socket disconnected.`);
+            socket.connect();
         });
 
         // either by directly modifying the `auth` attribute
