@@ -36,4 +36,4 @@ if (undef(srv)) {
 console.log(`${new Date().getTime()} [info] » Starting build worker against ${srv}`);
 const worker = new Worker(srv);
 
-if (exists(r)) r.info(["Worker started with server "+srv, "circle"]);
+if (exists(r)) r.info(["Worker started with server "+srv, "circle", process.env.ENVIRONMENT]);
