@@ -237,6 +237,7 @@ module.exports = class Worker {
 
         shell.stderr.on("data", (data) => {
             let ddstring = data.toString();
+            console.log("[shell] > ", ddstring);
             if (ddstring.indexOf("fatal:") !== -1) {
                 this.running = false;
                 socket.emit('job-status', {
