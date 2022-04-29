@@ -20,7 +20,7 @@ set +e
 
 # Swarm Support
 
-random-string()
+random_string()
 {
     cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${1:-32} | head -n 1
 }
@@ -63,7 +63,7 @@ swarm-build()
 	FIND="\/mnt\/data\/repos"
 	REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/repos"
 	WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$REPLACE/")
-	UNIQUE_NAME="thinx_build-$(random-string 16)"
+	UNIQUE_NAME="thinx_build-$(random_string 16)"
 
 	SERVICE_COMMAND="docker service create \
 	--restart-condition=none \
