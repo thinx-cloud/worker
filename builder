@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 if [[ ! -f ./infer ]]; then
 	echo "Infer tool missing!"
