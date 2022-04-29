@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # THiNX Builder Library Functions
 
@@ -97,7 +97,8 @@ function infer_platform
     	# Override from YAML
 		YMLFILE=$(find $path -name "thinx.yml" -maxdepth 1 | head -n 1)
 		if [[ -f "$YMLFILE" ]]; then
-		  eval $(parse_yaml "$YMLFILE" "")
+		  YML=$(parse_yaml "$YMLFILE" "")
+		  eval "$YML"
 			if [[ ! -z $platformio ]]; then
 				platform = "platformio"
 			fi
