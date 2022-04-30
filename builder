@@ -52,22 +52,18 @@ swarmbuild()
 	BUILD_IMAGE=$2
 	WORKDIR=$1
 
-	# will deprecate with passing the var
-	if [[ -z "${COUNTRY}" ]]; 
-	then
-		COUNTRY=cz
-	fi
-
 	# nodemcu container has different startup command (build)
 	if [[ ! -z "$(echo $BUILD_IMAGE | grep nodemcu)" ]]; 
 	then
 		BUILD_IMAGE="$BUILD_IMAGE build"
 	fi
 
+	# Deprecated
 	# Restores internal to external mount path for service outside this container
-	FIND="\/mnt\/data\/repos"
-	REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/repos"
-	WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$REPLACE/")
+	# FIND="\/mnt\/data\/repos"
+	# REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/repos"
+	# WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$REPLACE/")
+
 	UNIQUE_NAME="thinx_build-$(randomstring 16)"
 
 	SERVICE_COMMAND="docker service create \
@@ -79,11 +75,11 @@ swarmbuild()
 	--reserve-memory=750MB \
 	--name $UNIQUE_NAME \
 	--mount type=bind,source=$WORKDIR,destination=/opt/workspace \
-	--mount type=bind,source=/mnt/data/thinx/$COUNTRY/deploy,destination=/mnt/data/deploy \
-	--mount type=bind,source=/mnt/data/thinx/$COUNTRY/repos,destination=/mnt/data/repos \
+	--mount type=bind,source=/mnt/data/thinx/deploy,destination=/mnt/data/deploy \
+	--mount type=bind,source=/mnt/data/thinx/repos,destination=/mnt/data/repos \
 	$BUILD_IMAGE"
 
-	# echo "$SERVICE_COMMAND"
+	echo "$SERVICE_COMMAND"
 	echo "Starting Build Service..."
 
 	$SERVICE_COMMAND
@@ -347,7 +343,6 @@ fi
 
 echo $BUILD_PATH | tee -a "${LOG_PATH}"
 cd $BUILD_PATH
-ls -la | tee -a "${LOG_PATH}"
 
 # Fetch submodules if any
 SINK=""
@@ -355,27 +350,27 @@ if [[ -d "${BUILD_PATH}/${REPO_NAME}" ]];
 then
 	echo "Directory $REPO_NAME exists, entering..." | tee -a "${LOG_PATH}"
 	cd $BUILD_PATH/$REPO_NAME
-	pwd | tee -a "${LOG_PATH}"
+	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 	ls -la | tee -a "${LOG_PATH}"
 	SINK=$BUILD_PATH/$REPO_NAME
 	cd $SINK
-	pwd | tee -a "${LOG_PATH}"
+	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 	ls -la | tee -a "${LOG_PATH}"
 else
-	pwd | tee -a "${LOG_PATH}"
+	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 	ls | tee -a "${LOG_PATH}"
-	echo "REPO_NAME ${REPO_NAME} does not exist, entering $REPO_PATH instead..." | tee -a "${LOG_PATH}"
-	SINK=$BUILD_PATH/$REPO_PATH
-	echo "Entering BUILD_PATH/REPO_PATH" | tee -a "${LOG_PATH}"
+	echo "REPO_NAME ${REPO_NAME} does not exist, entering * instead..." | tee -a "${LOG_PATH}"
+	SINK=$BUILD_PATH/*
+	echo "Entering ${SINK}" | tee -a "${LOG_PATH}"
 	if [[ -d "$SINK" ]]; 
 	then 
 		cd $SINK 
-		pwd | tee -a "${LOG_PATH}"
+		echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 		ls -la | tee -a "${LOG_PATH}"
 	fi
 fi
 
-pwd | tee -a "${LOG_PATH}"
+echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 ls -la | tee -a "${LOG_PATH}"
 
 echo "Updating submodules..." | tee -a "${LOG_PATH}"
@@ -958,10 +953,15 @@ case $PLATFORM in
 						echo "WTF THINX_FILE does not exist?"
 					else
 						echo "[arduino] Will write ENV_HASH to ${THINX_FILE}"
+						# generate checksum and get rid of trailing "-"
 						ENV_HASH=$(echo ${ENVOUT} | sha256sum | awk '{ print $1 }')
+						# prepare new header line in C
 						LINE="#define ENV_HASH \"${ENV_HASH}\""
+						# delete old line/placeholder
 						sed -i '/ENV_HASH/d' ${THINX_FILE}
+						# add new line with checksum
 						echo -e ${LINE} >> ${THINX_FILE}
+						echo "THINX_FILE saved."
 					fi
 				fi
 			fi
