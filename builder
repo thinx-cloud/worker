@@ -59,13 +59,13 @@ swarmbuild()
 	fi
 
 	FIND="\/mnt\/data\/"
-	DEPLOY_PATH=/mnt/data/thinx/deploy
-	REPOS_PATH=/mnt/data/thinx/repos
+	DEPLOY_PATH=/mnt/data/deploy
+	REPOS_PATH=/mnt/data/repos
 
 	# replaces /mnt/data with /mnt/gluster for Service init
 	if [[ -z "${DATA_PATH}"]]; 
 	then
-		DATA_PATH="\/mnt\/gluster\/"
+		DATA_PATH="\/mnt\/gluster\/thinx\/"
 	fi
 	
 	WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$DATA_PATH/")
