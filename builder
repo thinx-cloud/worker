@@ -59,10 +59,13 @@ swarmbuild()
 	fi
 
 	# Deprecated
-	# Restores internal to external mount path for service outside this container
-	# FIND="\/mnt\/data\/repos"
-	# REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/repos"
-	# WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$REPLACE/")
+	# The REPLACE path should be configurable as env-var!!!
+	FIND="\/mnt\/data\/repos"
+	if [[ -z "${REPOS_PATH}"]]; 
+	then
+		REPOS_PATH="\/mnt\/gluster\/thinx\/repos"
+	fi
+	WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$REPOS_PATH/")
 
 	UNIQUE_NAME="thinx_build-$(randomstring 16)"
 

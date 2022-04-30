@@ -12,12 +12,13 @@ Use the `WORKER_SECRET` variable on boths sides (API/Worker) to make sure worker
 
 ## Supported Environment Variables
 
-| Name.                   | Usage.                                          |
-|:------------------------|:------------------------------------------------|
-| `THINX_SERVER`          | Build Server URL, defaults to http://api:4000  |
-| `ROLLBAR_ACCESS_TOKEN`  | Authentication token for Rollbar (optional)     |
-| `ROLLBAR_ENVIRONMENT`   | Enviroment for Rollbar (required if token set)  |
-| `WORKER_SECRET`         | If set, jobs will be validated for this secret. |
+| Name.                   | Usage.                                            |
+|:------------------------|:--------------------------------------------------|
+| `THINX_SERVER`          | Build Server URL, defaults to http://api:4000     |
+| `ROLLBAR_ACCESS_TOKEN`  | Authentication token for Rollbar (optional)       |
+| `ROLLBAR_ENVIRONMENT`   | Enviroment for Rollbar (required if token set)    |
+| `REPOS_PATH`            | Path to /repos folder in Gluster for Swarm builds |
+| `WORKER_SECRET`         | If set, jobs will be validated for this secret.   |
 
 ## Building in Development
 
@@ -30,6 +31,7 @@ Use the `WORKER_SECRET` variable on boths sides (API/Worker) to make sure worker
   -e WORKER_SECRET=<required> \
   -e ROLLBAR_ACCESS_TOKEN=<optional> \
   -e ROLLBAR_ENVIRONMENT=production \
+  -e REPOS_PATH=/mnt/gluster/thinx/repos \
   -ti thinxcloud/worker
 
 ```
