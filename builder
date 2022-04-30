@@ -351,7 +351,7 @@ cd $BUILD_PATH
 
 # Fetch submodules if any
 SINK=""
-if [[ -d $BUILD_PATH/$REPO_NAME ]];
+if [[ -d "${BUILD_PATH}/${REPO_NAME}" ]];
 then
 	echo "Directory $REPO_NAME exists, entering..." | tee -a "${LOG_PATH}"
 	cd $BUILD_PATH/$REPO_NAME
@@ -359,17 +359,20 @@ then
 	cd $SINK
 else
 	pwd | tee -a "${LOG_PATH}"
-	# ls | tee -a "${LOG_PATH}"
+	ls | tee -a "${LOG_PATH}"
 	echo "REPO_NAME ${REPO_NAME} does not exist, entering $REPO_PATH instead..." | tee -a "${LOG_PATH}"
 	SINK=$BUILD_PATH/$REPO_PATH
 	echo "Entering BUILD_PATH/REPO_PATH" | tee -a "${LOG_PATH}"
-	cd $SINK
+	if [[ -d "$SINK" ]]; 
+	then 
+		cd $SINK 
+	fi
 fi
 
 echo "Updating submodules..." | tee -a "${LOG_PATH}"
 git submodule update --init --recursive | tee -a "${LOG_PATH}"
 
-if [[ ! -d $SINK/.git ]];
+if [[ ! -d "$SINK/.git" ]];
 then
 	echo "WARNING! No .git folder on path: $BUILD_PATH/$REPO_PATH/.git" | tee -a "${LOG_PATH}"
 else
