@@ -62,7 +62,7 @@ swarmbuild()
 	DEPLOY_PATH=/mnt/data/deploy
 	REPOS_PATH=/mnt/data/repos
 
-	# replaces /mnt/data with /mnt/gluster for Service init
+	# replaces /mnt/data with /mnt/gluster/thinx (or DATA_PATH if set) for Service init
 	if [[ -z "${DATA_PATH}"]]; 
 	then
 		DATA_PATH="\/mnt\/gluster\/thinx\/"
@@ -110,7 +110,7 @@ swarmbuild()
 
 	while $RUNNING
 	do
-		((ITERATIONS++))
+		ITERATIONS=ITERATIONS+1
 		sleep 30
 
 		DSTATUS=$(docker service ls | grep  $UNIQUE_NAME)
@@ -1325,8 +1325,10 @@ MD5="0"
 
 if [[ ! -f "${OUTFILE}" ]];
 then
+	echo "Could not find outfile $OUTFILE..." | tee -a "${LOG_PATH}"
+	
 	FIND="\/mnt\/data\/deploy"
-	REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/deploy"
+	REPLACE="\/mnt\/gluster\/thinx\/deploy"
 	OUTFILE=$(echo "$OUTFILE" | sed "s/$FIND/$REPLACE/")
 	if [[ ! -f "${OUTFILE}" ]];
 	then
