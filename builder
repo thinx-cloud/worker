@@ -1,14 +1,16 @@
 #!/bin/sh
 
-if [[ ! -f ./infer ]]; then
+if [[ ! -f ./infer ]];
+then
 	echo "Infer tool missing!"
 	exit 1
 fi
 
 source ./infer # utility functions like parse_yaml
 
-if [[ -z $THINX_ROOT ]]; then
-export THINX_ROOT=/opt/thinx/thinx-device-api
+if [[ -z $THINX_ROOT ]];
+then
+	export THINX_ROOT=/opt/thinx/thinx-device-api
 fi
 
 echo ""
@@ -30,12 +32,13 @@ NODE_ID=$(docker info -f {{.Swarm.NodeID}})
 # RETURNS ERROR IF /var/run/docker.sock is not readable by worker!
 
 SWARM=false
-if [[ -z $NODE_ID ]]; then
-        echo "Non swarm mode. Make sure /var/run/docker.sock is readable by the worker on this node in order to run in Swarm mode."
-		SWARM=false
+if [[ -z $NODE_ID ]];
+then
+	echo "Non swarm mode. Make sure /var/run/docker.sock is readable by the worker on this node in order to run in Swarm mode."
+	SWARM=false
 else
-        echo "This is a swarm node ${NODE_ID}"
-		SWARM=true
+	echo "This is a swarm node ${NODE_ID}"
+	SWARM=true
 fi
 
 BUILD_IMAGE=suculent/arduino-docker-build
@@ -50,12 +53,14 @@ swarmbuild()
 	WORKDIR=$1
 
 	# will deprecate with passing the var
-	if [[ -z $COUNTRY ]]; then
+	if [[ -z $COUNTRY ]]; 
+	then
 		COUNTRY=cz
 	fi
 
 	# nodemcu container has different startup command (build)
-	if [[ ! -z $(echo $BUILD_IMAGE | grep nodemcu) ]];
+	if [[ ! -z $(echo $BUILD_IMAGE | grep nodemcu) ]]; 
+	then
 		BUILD_IMAGE="$BUILD_IMAGE build"
 	fi
 
@@ -104,18 +109,21 @@ swarmbuild()
 		echo $DSTATUS
 
 		# if grep -q "replicated\t1/1" <<< "$DSTATUS"
-		if grep -q "1/1" <<< "$DSTATUS"; then
+		if grep -q "1/1" <<< "$DSTATUS";
+		then
 			echo "Still running..."
 		fi
 
-		if grep -q "task: non-zero exit" <<< "$DSTATUS"; then
+		if grep -q "task: non-zero exit" <<< "$DSTATUS";
+		then
 			echo "Service task failure."
 			docker service rm $UNIQUE_NAME
 			RUNNING=false
 		fi
 
 		# if grep -q "replicated\t0/0" <<< "$DSTATUS"
-		if grep -q "0/0" <<< "$DSTATUS"; then
+		if grep -q "0/0" <<< "$DSTATUS";
+		then
 			echo "Build completed."
 			# append service logs to catch THINX BUILD SUCCESSFUL phrase; serves to decide to extract OUTFILE laters
 			docker service logs $UNIQUE_NAME | tee -a "$LOG_PATH"
@@ -124,19 +132,22 @@ swarmbuild()
 			RUNNING=false
 		fi
 
-		if [[ "$DSTATUS" == *"No such image"* ]]; then
+		if [[ "$DSTATUS" == *"No such image"* ]];
+		then
 			echo "Service image failure."
 			docker service rm $UNIQUE_NAME
 			RUNNING=false
 		fi
 
-		if [[ "$DSTATUS" == *"invalid"* ]]; then
+		if [[ "$DSTATUS" == *"invalid"* ]];
+		then
 			echo "Service configuration failure."
 			docker service rm $UNIQUE_NAME
 			RUNNING=false
 		fi
 
-		if [[ "$ITERATIONS" -ge "$MAX_ITERATIONS" ]]; then
+		if [[ "$ITERATIONS" -ge "$MAX_ITERATIONS" ]];
+		then
 			echo "Build Timed Out, terminating service."
 			docker service rm $UNIQUE_NAME
 			RUNNING=false
@@ -205,11 +216,13 @@ done
 
 # later used in DevSec and NodeMCU
 CONFIG_ROOT=$(pwd)
-if [[ ! -f $CONFIG_ROOT/conf/config.json ]]; then
+if [[ ! -f $CONFIG_ROOT/conf/config.json ]];
+then
 	CONFIG_ROOT=/mnt/data
 fi
 
-if [ -f $CONFIG_ROOT/conf/config.json ]; then
+if [ -f $CONFIG_ROOT/conf/config.json ];
+then
 # from app_config.data_root
 DATA_ROOT_X=$(cat $CONFIG_ROOT/conf/config.json | jq .data_root)
 DATA_ROOT="$(sed 's/\"//g' <<< $DATA_ROOT_X)"
@@ -238,7 +251,8 @@ chmod -R 777 $DEPLOYMENT_PATH
 
 touch $DEPLOYMENT_PATH/.write
 
-if [[ ! -f $DEPLOYMENT_PATH/.write ]]; then
+if [[ ! -f $DEPLOYMENT_PATH/.write ]];
+then
 	echo "ERROR: Deployment path $DEPLOYMENT_PATH not writable by Worker shell! Exiting build."
 	exit 6
 fi
@@ -246,7 +260,8 @@ fi
 # Create user-referenced folder in public www space
 
 LOG_PATH="${DEPLOYMENT_PATH}/build.log"
-if [[ ! -f $LOG_PATH ]]; then
+if [[ ! -f $LOG_PATH ]];
+then
 	echo "Creating new logfile at: $LOG_PATH"
 else
 	echo "Found existing logfile at: $LOG_PATH"
@@ -255,12 +270,14 @@ fi
 
 touch $LOG_PATH
 
-if [[ -f "lint.txt" ]]; then
+if [[ -f "lint.txt" ]];
+then
 	echo "Found LINT results in current folder:" | tee -a "${LOG_PATH}"
 	echo "lint.txt" | tee -a "${LOG_PATH}"
 fi
 
-if [[ -f "../lint.txt" ]]; then
+if [[ -f "../lint.txt" ]];
+then
 	echo "Found LINT results in parent folder:" | tee -a "${LOG_PATH}"
 	echo "../lint.txt" | tee -a "${LOG_PATH}"
 fi
@@ -272,7 +289,8 @@ echo "Making deployment path: ${DEPLOYMENT_PATH}" | tee -a "${LOG_PATH}"
 # TODO: Fix this, depends on protocol (changes with git+ssh)
 # extract the protocol
 proto="$(echo $GIT_REPO | grep :// | sed -e's,^\(.*://\).*,\1,g')"
-if [[ -z $proto ]]; then
+if [[ -z $proto ]];
+then
   proto="git-ssl"
 fi
 
@@ -284,7 +302,8 @@ host="$(echo ${url/$user@/} | cut -d/ -f1)"
 
 # by request - try to extract the port; support custom git ports in future
 port="$(echo $host | sed -e 's,^.*:,:,g' -e 's,.*:\([0-9]*\).*,\1,g' -e 's,[^0-9],,g')"
-if [[ -z $port ]]; then
+if [[ -z $port ]];
+then
   port=22
 fi
 
@@ -293,7 +312,8 @@ REPO_NAME="$(echo $url | grep / | cut -d/ -f3-)"
 
 echo
 
-if [[ "$user" == "git" ]]; then
+if [[ "$user" == "git" ]];
+then
   	echo "Overriding for user git and git-ssl..." | tee -a "${LOG_PATH}"
 	proto="git-ssl"
 	len=${#REPO_NAME}
@@ -322,7 +342,8 @@ REPO_NAME=${REPO_NAME%.git}
 
 # TODO: only if $REPO_NAME contains slash(es)
 BUILD_PATH=$BUILD_ROOT/$OWNER_ID/$UDID/$BUILD_ID
-if [[ ! -d $BUILD_PATH ]]; then
+if [[ ! -d $BUILD_PATH ]];
+then
 	mkdir -p $BUILD_PATH
 fi
 
@@ -332,7 +353,8 @@ cd $BUILD_PATH
 
 # Fetch submodules if any
 SINK=""
-if [[ -d $BUILD_PATH/$REPO_NAME ]]; then
+if [[ -d $BUILD_PATH/$REPO_NAME ]];
+then
 	echo "Directory $REPO_NAME exists, entering..." | tee -a "${LOG_PATH}"
 	cd $BUILD_PATH/$REPO_NAME
 	SINK=$BUILD_PATH/$REPO_NAME
@@ -349,7 +371,8 @@ fi
 echo "Updating submodules..." | tee -a "${LOG_PATH}"
 git submodule update --init --recursive | tee -a "${LOG_PATH}"
 
-if [[ ! -d $SINK/.git ]]; then
+if [[ ! -d $SINK/.git ]];
+then
 	echo "WARNING! No .git folder on path: $BUILD_PATH/$REPO_PATH/.git" | tee -a "${LOG_PATH}"
 else
 	cd $SINK | tee -a "${LOG_PATH}"
@@ -370,7 +393,8 @@ micropython_build_type="firmware"
 micropython_platform="esp8266"
 
 YML=$(find $BUILD_PATH/$REPO_NAME -name "thinx.yml")
-if [[ ! -z "$YML" ]]; then
+if [[ ! -z "$YML" ]];
+then
 	#echo "Found ${YML}, reading..." | tee -a "${LOG_PATH}"
 	echo "Reading thinx.yml build configuration..."
 	eval $(parse_yaml $YML)
@@ -382,7 +406,8 @@ fi
 
 echo "Searching THiNX-File in $BUILD_PATH/$REPO_NAME..." | tee -a "${LOG_PATH}"
 
-if [[ -z $THINX_HOSTNAME ]]; then
+if [[ -z $THINX_HOSTNAME ]];
+then
 	echo "THINX_HOSTNAME must be set!"
 	# exit 1
 fi
@@ -390,7 +415,8 @@ fi
 THINX_CLOUD_URL="${THINX_HOSTNAME}"
 THINX_MQTT_URL="${THINX_HOSTNAME}"
 
-if [[ ! -z $DEVICE_ALIAS ]]; then
+if [[ ! -z $DEVICE_ALIAS ]];
+then
 	THINX_ALIAS=$DEVICE_ALIAS
 else
 	THINX_ALIAS="vanilla"
@@ -401,12 +427,14 @@ cd $BUILD_PATH/$REPO_NAME
 
 
 THX_VERSION="$(git describe --abbrev=0 --tags)"
-if [[ $? > 0 ]]; then
+if [[ $? > 0 ]];
+then
 	THX_VERSION="1.0"
 fi
 
 THX_REVISION="$(git rev-list --all --count)"
-if [[ $? > 0 ]]; then
+if [[ $? > 0 ]];
+then
 	THX_REVISION="1"
 fi
 
@@ -422,12 +450,14 @@ echo "[builder] Inferred platform: ${PLATFORM}"
 LANGUAGE=$(language_for_platform $PLATFORM)
 LANGUAGE_NAME=$(language_name $LANGUAGE)
 
-if [[ -z $PLATFORM ]]; then
+if [[ -z $PLATFORM ]];
+then
 	echo "No language. Cannot continue builder."
 	exit 1
 fi
 
-if [[ -z $LANGUAGE ]]; then
+if [[ -z $LANGUAGE ]];
+then
 	echo "No language. Cannot continue builder."
 	exit 1
 fi
@@ -439,7 +469,8 @@ OUTFILE="<none>"
 BUILD_SUCCESS=false
 
 # If running inside Docker, we'll start builders as siblings
-if [ -f /.dockerenv ]; then
+if [ -f /.dockerenv ];
+then
 	DOCKER_PREFIX="-v /var/run/docker.sock:/var/run/docker.sock"
 else
 	DOCKER_PREFIX=""
@@ -459,10 +490,12 @@ echo "Running DevSec..." | tee -a "${LOG_PATH}"
 
 # Fetche SSID and PASS for DevSec
 ENVS=$(find $BUILD_PATH/$REPO_NAME -name "environment.json" | head -n 1)
-if [[ ! -f $ENVS ]]; then
+if [[ ! -f $ENVS ]];
+then
 	echo "No environment.json found" | tee -a "${LOG_PATH}"
 else
-	if [ ! -f $THINX_FILE ]; then
+	if [ ! -f $THINX_FILE ];
+then
 		echo "WTF THINX_FILE does not exist?" | tee -a "${LOG_PATH}"
 	else
 		# DEPRECATED: Use ENV_SSID and ENV_PASS to set devsec_ssid and devsec_pass 
@@ -470,7 +503,8 @@ else
 		# On build those are pushed to thinx.yml overwriting devsec.ssid and devsec.pass keys using ENVIRONMENT_CSSID and ENVIRONMENT_CPASS 
 		# From point of view, storing those values in environment.json is incorrect, because this file should not contain CSSID and CPASS (but only global SSID and PASS if any)
 
-		if [[ ! -f $ENVS ]]; then
+		if [[ ! -f $ENVS ]];
+then
 			echo "No environment.json found" | tee -a "${LOG_PATH}"
 		else
 			echo "Overriding DevSec values from: ${ENVS}" | tee -a "${LOG_PATH}"
@@ -480,17 +514,20 @@ else
 				
 				VAL=$(jq '.'$keyname $ENVS)
 
-				if [[ ${keyname} == "pass" ]]; then
+				if [[ ${keyname} == "pass" ]];
+then
 					devsec_pass=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_pass: ${devsec_pass}" | tee -a "${LOG_PATH}"
 				fi
 
-				if [[ ${keyname} == "ssid" ]]; then
+				if [[ ${keyname} == "ssid" ]];
+then
 					devsec_ssid=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_ssid: ${devsec_ssid}" | tee -a "${LOG_PATH}"
 				fi
 
-				if [[ ${keyname} == "ckey" ]]; then
+				if [[ ${keyname} == "ckey" ]];
+then
 					devsec_ckey=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_ckey: ${devsec_ckey}" | tee -a "${LOG_PATH}"
 				fi
@@ -502,10 +539,13 @@ fi
 
 # Fetches path and rebuilds the signature file if found and all required arguments are available...
 SIGNATURE_FILE=$(find . -maxdepth 3 -name "embedded_signature.h")
-if [[ ! -z $SIGNATURE_FILE ]]; then
-	if [[ -f $SIGNATURE_FILE ]]; then
+if [[ ! -z $SIGNATURE_FILE ]];
+then
+	if [[ -f $SIGNATURE_FILE ]];
+then
 		# TODO: Validate inputs before doing this... MAC length and FCID length must be exactly 6, etc. Should be implemented in signer.
-		if [[ ! -z $FCID && ! -z $MAC && ! -z ${devsec_ckey} ]]; then
+		if [[ ! -z $FCID && ! -z $MAC && ! -z ${devsec_ckey} ]];
+then
 			echo "DevSec building signature into ${SIGNATURE_FILE}" | tee -a "${LOG_PATH}"
 			# This makes sure the -c "CKEY" argument does not fall apart due to spaces...
 			# in case the CKEY would contain + this needs to be changed to another character, but not \n like in many examples in the wild.
@@ -523,7 +563,8 @@ if [[ ! -z $SIGNATURE_FILE ]]; then
 			DEVSEC_SUCCESS=$?
 			IFS=$SAVED_IFS
 			
-			if [[ $DEVSEC_SUCCESS == 0 ]]; then
+			if [[ $DEVSEC_SUCCESS == 0 ]];
+then
 				echo "$DEVSEC_CONTENTS" > "$(pwd)/$SIGNATURE_FILE"
 				echo "DevSec Device Signature file generated..." | tee -a "${LOG_PATH}"
 				echo "$DEVSEC_CONTENTS" > "${LOG_PATH}"
@@ -562,12 +603,14 @@ case $PLATFORM in
 
 			# ls | tee -a "${LOG_PATH}"
 
-			if [[ ! ${RUN} ]]; then
+			if [[ ! ${RUN} ]];
+then
 				echo "☢ Dry-run ${BUILD_ID} completed. Skipping actual deployment." | tee -a "${LOG_PATH}"
 				STATUS='DRY_RUN_OK'
 			else
 				# Check Artifacts
-				if [[ $BUILD_SUCCESS == true ]] ; then
+				if [[ $BUILD_SUCCESS == true ]] ;
+then
 					echo "NodeJS Build: Listing output directory: " | tee -a "${LOG_PATH}"
 					pwd | tee -a "${LOG_PATH}"
 					# ls | tee -a "${LOG_PATH}"
@@ -584,7 +627,8 @@ case $PLATFORM in
 			# Injects thinx to esp8266/modules in firmware mode. Should also prebuild SPIFFS.
 
 			BUILD_TYPE=$micropython_build_type
-			if [[ $BUILD_TYPE == "file" ]]; then
+			if [[ $BUILD_TYPE == "file" ]];
+then
 				echo "Build type: file" | tee -a "${LOG_PATH}"
 				OUTFILE=${DEPLOYMENT_PATH}/boot.py
 				cp -vf $WORKDIR/*.py ${DEPLOYMENT_PATH} # copy all .py files without building
@@ -592,7 +636,8 @@ case $PLATFORM in
 			else
 				echo "Build type: firmware (or undefined)" | tee -a "${LOG_PATH}"
 				OUTFILE=${DEPLOYMENT_PATH}/firmware.bin
-				if [[ -z $(find $OUTFILE -type f -size +10000c 2>/dev/null) ]]; then
+				if [[ -z $(find $OUTFILE -type f -size +10000c 2>/dev/null) ]];
+then
 					rm -rf $OUTFILE
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
@@ -606,9 +651,11 @@ case $PLATFORM in
 			UPY_FILES=$(find $WORKDIR -name *.py)
 
 			for pyfile in ${UPY_FILES[@]}; do
-				if [[ $BUILD_TYPE == "firmware" ]]; then
+				if [[ $BUILD_TYPE == "firmware" ]];
+then
 					FSPATH=$WORKDIR/$(basename ${pyfile}) # we should already stand in this folder
-					if [[ -f $FSPATH ]]; then
+					if [[ -f $FSPATH ]];
+then
 						rm -rf $FSPATH
 						cp -vf "${pyfile}" $FSPATH
 						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${pyfile} ./* # zip artefacts
@@ -619,20 +666,24 @@ case $PLATFORM in
 				fi
 			done
 
-			if [[ $SWARM == false ]]; then
-				if [[ $BUILD_TYPE == "firmware" ]]; then
+			if [[ $SWARM == false ]];
+then
+				if [[ $BUILD_TYPE == "firmware" ]];
+then
 					echo "Micropython Build: Running Dockerized builder..." | tee -a "${LOG_PATH}"
 					set -o pipefail
 					docker pull suculent/micropython-docker-build
 					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v $(pwd)/modules:/micropython/esp8266/modules --workdir /micropython/esp8266 suculent/micropython-docker-build | tee -a "${LOG_PATH}"
 					echo "${PIPESTATUS[@]}"
 					set +o pipefail
-					if [[ ! -z $(cat ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ; then
+					if [[ ! -z $(cat ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ;
+then
 						BUILD_SUCCESS=true
 						echo "Zipping artifacts to ${BUILD_ID}.zip..." | tee -a "${LOG_PATH}"
 						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./build/** # zip artefacts
 					fi
-					if [[ -z $(find $OUTFILE -type f -size +10000c 2>/dev/null) ]]; then
+					if [[ -z $(find $OUTFILE -type f -size +10000c 2>/dev/null) ]];
+then
 						rm -rf $OUTFILE
 						BUILD_SUCCESS=false
 						echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
@@ -646,18 +697,21 @@ case $PLATFORM in
 
 			# ls | tee -a "${LOG_PATH}"
 
-			if [[ ! ${RUN} ]]; then
+			if [[ ! ${RUN} ]];
+then
 				echo "☢ Dry-run ${BUILD_ID} completed. Skipping actual deployment." | tee -a "${LOG_PATH}"
 				STATUS='DRY_RUN_OK'
 			else
 				# Check Artifacts
-				if [[ $BUILD_SUCCESS == true ]] ; then
+				if [[ $BUILD_SUCCESS == true ]] ;
+then
 					echo "NodeMCU Build: Listing output directory: " | tee -a "${LOG_PATH}"
 					pwd | tee -a "${LOG_PATH}"
 					# ls | tee -a "${LOG_PATH}"
 					echo "NodeMCU Build: Listing binary artifacts: " | tee -a "${LOG_PATH}"
 					# ls ./bin | tee -a "${LOG_PATH}"
-					if [[ $BUILD_TYPE == "firmware" ]]; then
+					if [[ $BUILD_TYPE == "firmware" ]];
+then
 						cp -v ./build/*.bin "$OUTPATH" | tee -a "${LOG_PATH}"
 						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./build/* # zip artefacts
 						rm -rf ./build/*
@@ -678,7 +732,8 @@ case $PLATFORM in
 			# which is actually a source of nodemcu-firmware (esp-open-sdk).
 
 			DROP_INTEGER_USE_FLOAT=$nodemcu_build_float
-			if [[ $DROP_INTEGER_USE_FLOAT == true ]]; then
+			if [[ $DROP_INTEGER_USE_FLOAT == true ]];
+then
 				OUTFILE_PREFIX='nodemcu_integer'
 				INTEGER_ONLY=true
 				DOCKER_PARAMS="-e INTEGER_ONLY=true"
@@ -689,7 +744,8 @@ case $PLATFORM in
 			fi
 
 			BUILD_TYPE=$nodemcu_build_type
-			if [[ $BUILD_TYPE == "file" ]]; then
+			if [[ $BUILD_TYPE == "file" ]];
+then
 				echo "Build type: file" | tee -a "${LOG_PATH}"
 				OUTFILE=${DEPLOYMENT_PATH}/thinx.lua
 				zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ${OUTFILE} # zip artefacts
@@ -697,7 +753,8 @@ case $PLATFORM in
 				echo "Build type: firmware (or undefined)" | tee -a "${LOG_PATH}"
 				OUTFILE=${DEPLOYMENT_PATH}/firmware.bin
 				zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ${OUTFILE} # zip artefacts
-				if [[ -z $(find $OUTFILE -type f -size +10000c 2>/dev/null) ]]; then
+				if [[ -z $(find $OUTFILE -type f -size +10000c 2>/dev/null) ]];
+then
 					rm -rf $OUTFILE
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
@@ -707,7 +764,8 @@ case $PLATFORM in
 			OUTPATH=${DEPLOYMENT_PATH}
 
 			echo "NodeMCU Build: Cleaning SPIFFS folder..." | tee -a "${LOG_PATH}"
-			if [ -f ${DEPLOYMENT_PATH}/local/fs/* ]; then
+			if [ -f ${DEPLOYMENT_PATH}/local/fs/* ];
+then
 				echo "Cleaning local/fs" | tee -a "${LOG_PATH}"
 				# rm -rf ${DEPLOYMENT_PATH}/local/fs/** # cleanup first
 			fi
@@ -717,7 +775,8 @@ case $PLATFORM in
 
 			CONFIG_PATH="./local/fs/thinx.json"
 
-			if [ -f $CONFIG_PATH ]; then
+			if [ -f $CONFIG_PATH ];
+then
 				echo "NodeMCU Build: Deconfiguring..." | tee -a "${LOG_PATH}"
 				rm -rf $CONFIG_PATH
 			fi
@@ -731,30 +790,35 @@ case $PLATFORM in
 
 			echo "NodeMCU Build: Customizing firmware..." | tee -a "${LOG_PATH}"
 
-			if [[ $BUILD_TYPE == "firmware" ]]; then
+			if [[ $BUILD_TYPE == "firmware" ]];
+then
 
 				# build into filesystem root
 				for luafile in ${FILES[@]}; do
 					FSPATH=./local/fs/$(basename ${luafile})
-					if [[ -f $FSPATH ]]; then
+					if [[ -f $FSPATH ]];
+then
 						rm -rf $FSPATH
 						cp -vf "${luafile}" $FSPATH
 					fi
-					if [ -f ./bin/* ]; then
+					if [ -f ./bin/* ];
+then
 						echo "NodeMCU Build: Cleaning bin & map files..." | tee -a "${LOG_PATH}"
 						rm -rf ./bin/*
 					fi
 				done
 
 				
-				if [[ $SWARM == false ]]; then
+				if [[ $SWARM == false ]];
+then
 					echo "NodeMCU Build: Running Dockerized builder..." | tee -a "${LOG_PATH}"
 					echo "running Docker >>>"
 					set -o pipefail
 					docker pull suculent/nodemcu-docker-build
 					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t ${DOCKER_PARAMS} -v `pwd`:/opt/nodemcu-firmware suculent/nodemcu-docker-build build | tee -a "${LOG_PATH}"
 					echo "${PIPESTATUS[@]}"
-					if [[ ! -z $(cat ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ; then
+					if [[ ! -z $(cat ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ;
+then
 						BUILD_SUCCESS=true
 						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./bin/* # zip artefacts
 					fi
@@ -769,17 +833,20 @@ case $PLATFORM in
 				zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ${FILES} # zip artefacts
 			fi
 
-			if [[ ! ${RUN} ]]; then
+			if [[ ! ${RUN} ]];
+then
 				echo "☢ Dry-run ${BUILD_ID} completed. Skipping actual deployment." | tee -a "${LOG_PATH}"
 				STATUS='DRY_RUN_OK'
 			else
-				if [[ $BUILD_SUCCESS == true ]] ; then
+				if [[ $BUILD_SUCCESS == true ]] ;
+then
 					echo "NodeMCU Build: Listing output directory: " | tee -a "${LOG_PATH}"
 					pwd | tee -a "${LOG_PATH}"
 					# ls | tee -a "${LOG_PATH}"
 					echo "NodeMCU Build: Listing binary artifacts: " | tee -a "${LOG_PATH}"
 					# ls ./bin | tee -a "${LOG_PATH}"
-					if [[ $BUILD_TYPE == "firmware" ]]; then
+					if [[ $BUILD_TYPE == "firmware" ]];
+then
 						echo "NodeMCU Build: Copying binary artifacts..." | tee -a "${LOG_PATH}"
 						cp -v "./bin/${OUTFILE_PREFIX}*.bin" "${DEPLOYMENT_PATH}/firmware.bin" | tee -a "${LOG_PATH}"
 					fi
@@ -799,8 +866,10 @@ case $PLATFORM in
 
 			# should copy thinx.json into ./fs/thinx.json
 			TNAME=$(find . -name "thinx.json")
-			if [[ -z $TNAME ]]; then
-				if [[ ! -d "./fs" ]]; then
+			if [[ -z $TNAME ]];
+then
+				if [[ ! -d "./fs" ]];
+then
 					mkdir ./fs
 				fi
 				TNAME=$(pwd)/fs/thinx.json
@@ -808,15 +877,18 @@ case $PLATFORM in
 			echo "Moving thinx_build.json to $TNAME" | tee -a "${LOG_PATH}"
 			cp "./thinx_build.json" "$TNAME"
 
-			if [[ $SWARM == false ]]; then
+			if [[ $SWARM == false ]];
+then
 				docker pull suculent/mongoose-docker-build
 				DCMD="docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v $(pwd):/opt/mongoose-builder suculent/mongoose-docker-build"
 				echo "running Docker ${DCMD} >>>" | tee -a "${LOG_PATH}"
 				set -o pipefail
 				"$DCMD"
 				echo "${PIPESTATUS[@]}"
-				if [[ ! -z $(echo ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ; then
-					if [[ -f $(pwd)/build/fw.zip ]]; then
+				if [[ ! -z $(echo ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ;
+then
+					if [[ -f $(pwd)/build/fw.zip ]];
+then
 						BUILD_SUCCESS=true
 						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./build/* # zip artefacts
 					else
@@ -829,12 +901,14 @@ case $PLATFORM in
 			fi
 
 			# Exit on dry run...
-			if [[ ! ${RUN} ]]; then
+			if [[ ! ${RUN} ]];
+then
 				echo "☢ Dry-run ${BUILD_ID} completed. Skipping actual deployment." | tee -a "${LOG_PATH}"
 				STATUS='DRY_RUN_OK'
 			else
 				# Check Artifacts
-				if [[ $BUILD_SUCCESS == true ]] ; then
+				if [[ $BUILD_SUCCESS == true ]] ;
+then
 					STATUS='OK'
 					cp $(pwd)/build/fw.zip $OUTFILE
 					# ls "$BUILD_PATH/build" | tee -a "${LOG_PATH}"
@@ -856,17 +930,20 @@ case $PLATFORM in
 
 			THINX_FILE=$( find . -name "thinx.h"  | head -n 1)
 
-			if [[ -z $THINX_FILE ]]; then
+			if [[ -z $THINX_FILE ]];
+then
 				echo "[arduino] WARNING! No THiNX-File found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
 				# exit 1 # will deprecate on modularization for more platforms
 			else
 				#echo "[arduino] Using THiNX-File: ${THINX_FILE/$(pwd)//}" | tee -a "${LOG_PATH}"
 				echo "[arduino] Using THiNX-File: ${THINX_FILE}" | tee -a "${LOG_PATH}"
 				ENVOUT=$(find $BUILD_PATH/$REPO_NAME -name "environment.json" | head -n 1)
-				if [[ ! -f $ENVOUT ]]; then
+				if [[ ! -f $ENVOUT ]];
+then
 					echo "No environment.json found"
 				else
-					if [ ! -f $THINX_FILE ]; then
+					if [ ! -f $THINX_FILE ];
+then
 						echo "WTF THINX_FILE does not exist?"
 					else
 						echo "[arduino] Will write ENV_HASH to ${THINX_FILE}"
@@ -881,7 +958,8 @@ case $PLATFORM in
 			OUTFILE=${DEPLOYMENT_PATH}/firmware.bin
 			#WORKDIR=$(pwd)
 
-			if [[ $SWARM == false ]]; then
+			if [[ $SWARM == false ]];
+then
 				set -o pipefail
 				echo "Docker: Starting THiNX Arduino Builder Container in folder" $(pwd)
 				docker pull suculent/arduino-docker-build
@@ -896,20 +974,23 @@ case $PLATFORM in
 
 			echo "[arduino] Docker completed <<<" | tee -a "${LOG_PATH}"
 
-			if [[ -f ${WORKDIR}/firmware.bin ]]; then
+			if [[ -f ${WORKDIR}/firmware.bin ]];
+then
 				BUILD_SUCCESS=true
 				# TODO: can be more binfiles with partitions!
 				BIN_FILE=$( find $BUILD_PATH/$REPO_NAME -name "*.bin" | head -n 1)
 				echo "BIN_FILE: ${BIN_FILE}" | tee -a "${LOG_PATH}"
 
-				if [[ ! -f $BIN_FILE ]]; then
+				if [[ ! -f $BIN_FILE ]];
+then
 					echo "BIN_FILE $BIN_FILE not found!"
 					BUILD_SUCCESS=false
 					exit 1
 				fi
 
 				# once again with size limit
-				if [[ -z $(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null) ]]; then
+				if [[ -z $(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null) ]];
+then
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
 					# ls -la | tee -a "${LOG_PATH}"
@@ -923,17 +1004,20 @@ case $PLATFORM in
 			fi
 
 			# Exit on dry run...
-			if [[ ! ${RUN} ]]; then
+			if [[ ! ${RUN} ]];
+then
 				echo "☢ Dry-run ${BUILD_ID} completed. Skipping actual deployment." | tee -a "${LOG_PATH}"
 				STATUS='DRY_RUN_OK'
 			else
 				# Check Artifacts
-				if [[ $BUILD_SUCCESS == true ]] ; then
+				if [[ $BUILD_SUCCESS == true ]] ;
+then
 					STATUS='OK'
 					echo "Exporting artifacts..." | tee -a "${LOG_PATH}"
 					# Deploy Artifacts
 
-					if [[ ! -d ./build ]]; then
+					if [[ ! -d ./build ]];
+then
 						# echo "Entering ./build" | tee -a "${LOG_PATH}"
 						cd ./build | tee -a "${LOG_PATH}"
 					fi
@@ -961,17 +1045,20 @@ case $PLATFORM in
 
 			THINX_FILE=$( find . -name "thinx.h"  | head -n 1)
 
-			if [[ -z $THINX_FILE ]]; then
+			if [[ -z $THINX_FILE ]];
+then
 				echo "[pine64] WARNING! No THiNX-File found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
 				# exit 1 # will deprecate on modularization for more platforms
 			else
 				#echo "[pine64] Using THiNX-File: ${THINX_FILE/$(pwd)//}" | tee -a "${LOG_PATH}"
 				echo "[pine64] Using THiNX-File: ${THINX_FILE}" | tee -a "${LOG_PATH}"
 				ENVOUT=$(find $BUILD_PATH/$REPO_NAME -name "environment.json" | head -n 1)
-				if [[ ! -f $ENVOUT ]]; then
+				if [[ ! -f $ENVOUT ]];
+then
 					echo "No environment.json found"
 				else
-					if [ ! -f $THINX_FILE ]; then
+					if [ ! -f $THINX_FILE ];
+then
 						echo "WTF THINX_FILE does not exist?"
 					else
 						echo "[pine64] Will write ENV_HASH to ${THINX_FILE}"
@@ -986,7 +1073,8 @@ case $PLATFORM in
 			OUTFILE=${DEPLOYMENT_PATH}/firmware.bin
 			WORKDIR=$(pwd)
 
-			if [[ $SWARM == false ]]; then
+			if [[ $SWARM == false ]];
+then
 				set -o pipefail
 				echo "Docker: Starting THiNX Arduino Builder Container in folder" $(pwd)
 				docker pull suculent/pine64-docker-build
@@ -1001,20 +1089,23 @@ case $PLATFORM in
 
 			echo "[pine64] Docker completed <<<" | tee -a "${LOG_PATH}"
 
-			if [[ ! -z $(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH}) ]]; then
+			if [[ ! -z $(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH}) ]];
+then
 				BUILD_SUCCESS=true
 				# TODO: can be more binfiles with partitions!
 				BIN_FILE=$( find $BUILD_PATH/$REPO_NAME -name "*.bin" | head -n 1)
 				echo "BIN_FILE: ${BIN_FILE}" | tee -a "${LOG_PATH}"
 
-				if [[ ! -f $BIN_FILE ]]; then
+				if [[ ! -f $BIN_FILE ]];
+then
 					echo "BIN_FILE $BIN_FILE not found!"
 					BUILD_SUCCESS=false
 					exit 1
 				fi
 
 				# once again with size limit
-				if [[ -z $(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null) ]]; then
+				if [[ -z $(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null) ]];
+then
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
 					# ls -la | tee -a "${LOG_PATH}"
@@ -1028,18 +1119,21 @@ case $PLATFORM in
 			fi
 
 			# Exit on dry run...
-			if [[ ! ${RUN} ]]; then
+			if [[ ! ${RUN} ]];
+then
 				echo "☢ Dry-run ${BUILD_ID} completed. Skipping actual deployment." | tee -a "${LOG_PATH}"
 				STATUS='DRY_RUN_OK'
 			else
 				# Check Artifacts
-				if [[ $BUILD_SUCCESS == true ]] ; then
+				if [[ $BUILD_SUCCESS == true ]] ;
+then
 					STATUS='OK'
 					echo "Exporting artifacts" | tee -a "${LOG_PATH}"
 					echo "Expected OUTFILE: ${OUTFILE}" | tee -a "${LOG_PATH}"
 					# Deploy Artifacts
 
-					if [[ ! -f "./build" ]]; then
+					if [[ ! -f "./build" ]];
+then
 						# echo "Entering ./build" | tee -a "${LOG_PATH}"
 						cd ./build | tee -a "${LOG_PATH}"
 					fi
@@ -1074,17 +1168,20 @@ case $PLATFORM in
 
 			echo "[platformio] pio thinx.h check stage... $_THINX_FILE"
 
-			if [[ -z $THINX_FILE ]]; then
+			if [[ -z $THINX_FILE ]];
+then
 				echo "[platformio] WARNING! No THiNX-File found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
 				# exit 1 # will deprecate on modularization for more platforms
 			else
 				#echo "[platformio] Using THiNX-File: ${THINX_FILE/$(pwd)//}" | tee -a "${LOG_PATH}"
 				echo "[platformio] Using THiNX-File: ${THINX_FILE}" | tee -a "${LOG_PATH}"
 				ENVOUT=$(find $BUILD_PATH/$REPO_NAME -name "environment.json" | head -n 1)
-				if [[ ! -f $ENVOUT ]]; then
+				if [[ ! -f $ENVOUT ]];
+then
 					echo "No environment.json found"
 				else
-					if [ ! -f $THINX_FILE ]; then
+					if [ ! -f $THINX_FILE ];
+then
 						echo "WTF THINX_FILE does not exist?"
 					else
 						echo "[platformio] Will write ENV_HASH to ${THINX_FILE}"
@@ -1098,12 +1195,14 @@ case $PLATFORM in
 
 			echo "[platformio] pio check stage..."
 
-			if [[ ! -f "./platformio.ini" ]]; then
+			if [[ ! -f "./platformio.ini" ]];
+then
 				PIO=$(find . -name "platformio.ini")
 				echo "PIO: $PIO" | tee -a "${LOG_PATH}"
 				PIOD=$(echo $PIO | tr -d "platformio.ini")
 				echo "PIOD: $PIOD" | tee -a "${LOG_PATH}"
-				if [[ -d "${PIOD}" ]]; then
+				if [[ -d "${PIOD}" ]];
+then
 					echo "$PIOD is a subdirectory, entering..." | tee -a "${LOG_PATH}"
 					cd $PIOD
 				else
@@ -1114,14 +1213,16 @@ case $PLATFORM in
 
 			echo "[platformio] build stage... swarm: $SWARM"
 
-			if [[ $SWARM == false ]]; then
+			if [[ $SWARM == false ]];
+then
 				echo "running Docker PIO >>>"
 				set -o pipefail
 				docker pull suculent/platformio-docker-build
 				DCMD=$(docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v `pwd`:/opt/workspace suculent/platformio-docker-build)
 				echo $DCMD | tee -a "${LOG_PATH}"
 				echo "${PIPESTATUS[@]}"
-				if [[ ! -z $(echo ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ; then
+				if [[ ! -z $(echo ${LOG_PATH} | grep "THiNX BUILD SUCCESSFUL") ]] ;
+then
 					BUILD_SUCCESS=true
 				else
 					BUILD_SUCCESS=$?
@@ -1139,7 +1240,8 @@ case $PLATFORM in
 			
 			echo "[platformio] OUTFILE ${OUTFILE}" | tee -a "${LOG_PATH}"
 
-			if [ ! -f $OUTFILE ]; then
+			if [ ! -f $OUTFILE ];
+then
 				echo "$OUTFILE not found" | tee -a "${LOG_PATH}"
 				BUILD_SUCCESS=false
 			else
@@ -1149,14 +1251,16 @@ case $PLATFORM in
 
 				echo "OUTFILE: ${OUTFILE}" | tee -a "${LOG_PATH}"
 
-				if [[ ! -f $OUTFILE ]]; then
+				if [[ ! -f $OUTFILE ]];
+then
 					echo "OUTFILE $OUTFILE not found!" | tee -a "${LOG_PATH}"
 					BUILD_SUCCESS=false
 					exit 1
 				fi
 
 				# once again with size limit
-				if [[ -z $(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null) ]]; then
+				if [[ -z $(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null) ]];
+then
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
 					# ls -la | tee -a "${LOG_PATH}"
@@ -1196,24 +1300,28 @@ cd $DEPLOYMENT_PATH
 SHA="0"
 MD5="0"
 
-if [[ ! -f "${OUTFILE}" ]]; then
+if [[ ! -f "${OUTFILE}" ]];
+then
 	FIND="\/mnt\/data\/deploy"
 	REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/deploy"
 	OUTFILE=$(echo "$OUTFILE" | sed "s/$FIND/$REPLACE/")
-	if [[ ! -f "${OUTFILE}" ]]; then
+	if [[ ! -f "${OUTFILE}" ]];
+	then
 		echo "Could not find outfile $OUTFILE anywhere..." | tee -a "${LOG_PATH}"
 		OUTFILE=""
 	fi
 fi
 
-if [[ "${OUTFILE}" != "" ]]; then
+if [[ "${OUTFILE}" != "" ]];
+	then
 	echo "Calculating checksum for $OUTFILE" | tee -a "${LOG_PATH}"
 	SHAX=$(shasum -a 256 $OUTFILE)
 	SHA="$(echo $SHAX | grep " " | cut -d" " -f1)"
 	MD5=$(md5sum "$OUTFILE" | cut -d ' ' -f 1)
 fi
 
-if [[ "${OUTFILE}" == "" ]]; then
+if [[ "${OUTFILE}" == "" ]];
+	then
 	OUTFILE="<none>"
 fi
 
@@ -1223,14 +1331,17 @@ echo "[builder] Post-flight check..." | tee -a "${LOG_PATH}"
 
 # add THINX_FIRMWARE_VERSION to the build.json envelope in order to differ between upgrades and crossgrades
 BUILD_FILE=$( find $BUILD_PATH/$REPO_NAME -name "thinx_build.json" )
-if [[ -z $BUILD_FILE ]]; then
+if [[ -z $BUILD_FILE ]];
+	then
 	BUILD_FILE=$( find $WORKDIR -name "thinx_build.json" )
 fi
-if [ ! -z ${BUILD_FILE} ]; then
+if [ ! -z ${BUILD_FILE} ];
+	then
 	THINX_FIRMWARE_VERSION=$(jq .THINX_FIRMWARE_VERSION ${BUILD_FILE} | tr -d '"')
 	#echo "[builder] THINX_FIRMWARE_VERSION=$THINX_FIRMWARE_VERSION" | tee -a "${LOG_PATH}"
 fi
-if [ -z ${THINX_FIRMWARE_VERSION} ]; then
+if [ -z ${THINX_FIRMWARE_VERSION} ];
+	then
 	pushd $BUILD_PATH/$REPO_NAME
 	TAG_VERSION=$(git describe --abbrev=0 --tags)
 	popd
@@ -1238,11 +1349,13 @@ if [ -z ${THINX_FIRMWARE_VERSION} ]; then
 	echo "[builder] No thinx_build.json file found, generating last-minute version: ${THINX_FIRMWARE_VERSION}" | tee -a "${LOG_PATH}"
 fi
 
-if [[ -f "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ]]; then
+if [[ -f "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ]];
+	then
 	cp -v "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" $TARGET_PATH
 fi
 
-if [[ $WORKER==1 ]]; then
+if [[ $WORKER==1 ]];
+then
 
 # Inside Worker, we don't call notifier, but just post the results into shell... THiNX builder must then call the notifier itself (or integrate it later)
 JSON=$(jo \

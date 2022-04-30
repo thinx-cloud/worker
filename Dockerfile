@@ -1,8 +1,8 @@
 # docker build -t suculent/thinx-worker .
 
-FROM node:17-alpine
+FROM node:18-alpine
 
-LABEL name="thinxcloud/worker" version="1.5.102"
+LABEL name="thinxcloud/worker" version="1.7.1780"
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
 
