@@ -398,7 +398,8 @@ if [[ ! -z "$YML" ]];
 then
 	#echo "Found ${YML}, reading..." | tee -a "${LOG_PATH}"
 	echo "Reading thinx.yml build configuration: $YML"
-	PARSED=$(parse_yaml $YML)
+	echo "Parsing YAML..."
+	PARSED=$(parse_yaml "$YML" "")
 	eval "$PARSED"
 else
 	exit 3
