@@ -58,14 +58,23 @@ swarmbuild()
 		BUILD_IMAGE="$BUILD_IMAGE build"
 	fi
 
-	# Deprecated
-	# The REPLACE path should be configurable as env-var!!!
-	FIND="\/mnt\/data\/repos"
-	if [[ -z "${REPOS_PATH}"]]; 
+	FIND="\/mnt\/data\/"
+	DEPLOY_PATH=/mnt/data/thinx/deploy
+	REPOS_PATH=/mnt/data/thinx/repos
+
+	# replaces /mnt/data with /mnt/gluster for Service init
+	if [[ -z "${DATA_PATH}"]]; 
 	then
-		REPOS_PATH="\/mnt\/gluster\/thinx\/repos"
+		DATA_PATH="\/mnt\/gluster\/"
 	fi
-	WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$REPOS_PATH/")
+	
+	WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$DATA_PATH/")
+	DEPLOY_PATH=$(echo "$DEPLOY_PATH" | sed "s/$FIND/$DATA_PATH/")
+	REPOS_PATH=$(echo "$REPOS_PATH" | sed "s/$FIND/$DATA_PATH/")
+
+	echo "WORKDIR: ${WORKDIR}"
+	echo "DEPLOY_PATH: ${DEPLOY_PATH}"
+	echo "REPOS_PATH: ${REPOS_PATH}"
 
 	UNIQUE_NAME="thinx_build-$(randomstring 16)"
 
@@ -78,8 +87,8 @@ swarmbuild()
 	--reserve-memory=750MB \
 	--name $UNIQUE_NAME \
 	--mount type=bind,source=$WORKDIR,destination=/opt/workspace \
-	--mount type=bind,source=/mnt/data/thinx/deploy,destination=/mnt/data/deploy \
-	--mount type=bind,source=/mnt/data/thinx/repos,destination=/mnt/data/repos \
+	--mount type=bind,source=$DEPLOY_PATH,destination=/mnt/data/deploy \
+	--mount type=bind,source=$REPOS_PATH,destination=/mnt/data/repos \
 	$BUILD_IMAGE"
 
 	echo "$SERVICE_COMMAND"
