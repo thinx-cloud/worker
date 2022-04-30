@@ -53,7 +53,6 @@ workflows:
           tag: latest
           context:
             - dockerhub
-            - sqreen
             - rollbar
           requires:
             - test

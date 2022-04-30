@@ -1,4 +1,3 @@
-let s = null; // Sqreen
 let r = null; // Rollbar
 
 function exists(x) {
@@ -7,10 +6,6 @@ function exists(x) {
 
 function undef(x) {
     return !exists(x);
-}
-
-if (exists(process.env.SQREEN_TOKEN)) {
-    s = require('sqreen');
 }
 
 if (exists(process.env.ROLLBAR_ACCESS_TOKEN)) {
