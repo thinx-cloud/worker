@@ -33,6 +33,7 @@ workflows:
           context:
             - coveralls-worker
             - rollbar
+            - sonarcloud
 
       - ggshield/scan:
           base_revision: << pipeline.git.base_revision >>
