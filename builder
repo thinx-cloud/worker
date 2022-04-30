@@ -53,13 +53,13 @@ swarmbuild()
 	WORKDIR=$1
 
 	# will deprecate with passing the var
-	if [[ -z $COUNTRY ]]; 
+	if [[ -z "${COUNTRY}" ]]; 
 	then
 		COUNTRY=cz
 	fi
 
 	# nodemcu container has different startup command (build)
-	if [[ ! -z $(echo $BUILD_IMAGE | grep nodemcu) ]]; 
+	if [[ ! -z "$(echo $BUILD_IMAGE | grep nodemcu)" ]]; 
 	then
 		BUILD_IMAGE="$BUILD_IMAGE build"
 	fi

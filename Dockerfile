@@ -2,7 +2,7 @@
 
 FROM node:18-alpine
 
-LABEL name="thinxcloud/worker" version="1.7.1780"
+LABEL name="thinxcloud/worker" version="1.7.86"
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
 
@@ -63,13 +63,6 @@ RUN set -x \
 	&& adduser --system dockremap -g 65536 \
 	&& echo 'dockremap:165536:65536' >> /etc/subuid \
 	&& echo 'dockremap:165536:65536' >> /etc/subgid
-
-# Docker-in-Docker, allows running another service/container 
-# based on https://github.com/docker/docker/tree/master/hack/dind
-ENV DIND_COMMIT 37498f009d8bf25fbb6199e8ccd34bed84f2874b
-RUN set -eux; \
-	wget -O /usr/local/bin/dind "https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind"; \
-	chmod +x /usr/local/bin/dind
 
 VOLUME /var/lib/docker
 
