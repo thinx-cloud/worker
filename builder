@@ -109,12 +109,12 @@ swarmbuild()
 		echo $DSTATUS
 
 		# if grep -q "replicated\t1/1" <<< "$DSTATUS"
-		if grep -q "1/1" <<< "$DSTATUS";
+		if [[ ! -z "$(grep -q \"1/1\" <<< \"$DSTATUS\")" ]] ;
 		then
 			echo "Still running..."
 		fi
 
-		if grep -q "task: non-zero exit" <<< "$DSTATUS";
+		if [[ -z "$(grep -q \"task: non-zero exit\" <<< \"$DSTATUS\")" ]] ;
 		then
 			echo "Service task failure."
 			docker service rm $UNIQUE_NAME
@@ -122,7 +122,7 @@ swarmbuild()
 		fi
 
 		# if grep -q "replicated\t0/0" <<< "$DSTATUS"
-		if grep -q "0/0" <<< "$DSTATUS";
+		if [[ "$(grep -q \"0/0\" <<< \"$DSTATUS\")" ]];
 		then
 			echo "Build completed."
 			# append service logs to catch THINX BUILD SUCCESSFUL phrase; serves to decide to extract OUTFILE laters
