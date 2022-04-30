@@ -22,9 +22,9 @@ jobs:
                 command: |
                   npm install
                   npm test
-            - coveralls/upload:
-                path_to_lcov: ./coverage/lcov.info
-                verbose: true
+            # - coveralls/upload:
+            #     path_to_lcov: ./coverage/lcov.info
+            #     verbose: true
       - sonarcloud/scan
 
 workflows:
