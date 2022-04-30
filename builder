@@ -492,12 +492,12 @@ echo "Running DevSec..." | tee -a "${LOG_PATH}"
 # which causes duplicate definitions and linker error.)
 
 # Fetche SSID and PASS for DevSec
-ENVS=$(find $BUILD_PATH/$REPO_NAME -name "environment.json" | head -n 1)
-if [[ ! -f $ENVS ]];
+ENVS=$(find "$BUILD_PATH/$REPO_NAME" -name "environment.json" | head -n 1)
+if [[ ! -f "$ENVS" ]];
 then
 	echo "No environment.json found" | tee -a "${LOG_PATH}"
 else
-	if [ ! -f $THINX_FILE ];
+	if [ ! -f "$THINX_FILE" ];
 then
 		echo "WTF THINX_FILE does not exist?" | tee -a "${LOG_PATH}"
 	else
@@ -506,8 +506,8 @@ then
 		# On build those are pushed to thinx.yml overwriting devsec.ssid and devsec.pass keys using ENVIRONMENT_CSSID and ENVIRONMENT_CPASS 
 		# From point of view, storing those values in environment.json is incorrect, because this file should not contain CSSID and CPASS (but only global SSID and PASS if any)
 
-		if [[ ! -f $ENVS ]];
-then
+		if [[ ! -f "$ENVS" ]];
+		then
 			echo "No environment.json found" | tee -a "${LOG_PATH}"
 		else
 			echo "Overriding DevSec values from: ${ENVS}" | tee -a "${LOG_PATH}"
@@ -518,19 +518,19 @@ then
 				VAL=$(jq '.'$keyname $ENVS)
 
 				if [[ ${keyname} == "pass" ]];
-then
+				then
 					devsec_pass=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_pass: ${devsec_pass}" | tee -a "${LOG_PATH}"
 				fi
 
 				if [[ ${keyname} == "ssid" ]];
-then
+				then
 					devsec_ssid=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_ssid: ${devsec_ssid}" | tee -a "${LOG_PATH}"
 				fi
 
 				if [[ ${keyname} == "ckey" ]];
-then
+				then
 					devsec_ckey=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_ckey: ${devsec_ckey}" | tee -a "${LOG_PATH}"
 				fi
