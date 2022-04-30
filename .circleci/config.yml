@@ -14,17 +14,15 @@ jobs:
       name: node/default
     steps:
       - checkout
-      - node/with-cache:
-          steps:
-            - run:
-                name: Run Tests
-                no_output_timeout: 1m
-                command: |
-                  npm install
-                  npm test
-            - coveralls/upload:
-                path_to_lcov: ./coverage/lcov.info
-                verbose: true
+      - run:
+          name: Run Tests
+          no_output_timeout: 1m
+          command: |
+            npm install
+            npm test
+      - coveralls/upload:
+          path_to_lcov: ./coverage/lcov.info
+          verbose: true
       - sonarcloud/scan
 
 workflows:
