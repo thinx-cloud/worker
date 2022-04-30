@@ -394,10 +394,11 @@ YML=$(find $BUILD_PATH/$REPO_NAME -name "thinx.yml")
 if [[ ! -z "$YML" ]];
 then
 	#echo "Found ${YML}, reading..." | tee -a "${LOG_PATH}"
-	echo "Reading thinx.yml build configuration..."
-	eval $(parse_yaml $YML)
+	echo "Reading thinx.yml build configuration: $YML"
+	PARSED=$(parse_yaml $YML)
+	eval "$PARSED"
 else
-		exit 1
+	exit 3
 fi
 
 # Overwrite Thinx.h file (should be required)
