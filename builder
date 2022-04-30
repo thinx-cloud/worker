@@ -517,19 +517,19 @@ then
 				
 				VAL=$(jq '.'$keyname $ENVS)
 
-				if [[ ${keyname} == "pass" ]];
+				if [[ "${keyname}" == "pass" ]];
 				then
 					devsec_pass=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_pass: ${devsec_pass}" | tee -a "${LOG_PATH}"
 				fi
 
-				if [[ ${keyname} == "ssid" ]];
+				if [[ "${keyname}" == "ssid" ]];
 				then
 					devsec_ssid=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_ssid: ${devsec_ssid}" | tee -a "${LOG_PATH}"
 				fi
 
-				if [[ ${keyname} == "ckey" ]];
+				if [[ "${keyname}" == "ckey" ]];
 				then
 					devsec_ckey=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
 					echo "Overriding devsec_ckey: ${devsec_ckey}" | tee -a "${LOG_PATH}"
