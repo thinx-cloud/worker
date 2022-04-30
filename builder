@@ -542,13 +542,13 @@ fi
 
 # Fetches path and rebuilds the signature file if found and all required arguments are available...
 SIGNATURE_FILE=$(find . -maxdepth 3 -name "embedded_signature.h")
-if [[ ! -z $SIGNATURE_FILE ]];
-then
-	if [[ -f $SIGNATURE_FILE ]];
-then
+if [[ ! -z "$SIGNATURE_FILE" ]];
+	then
+	if [[ -f "$SIGNATURE_FILE" ]];
+	then
 		# TODO: Validate inputs before doing this... MAC length and FCID length must be exactly 6, etc. Should be implemented in signer.
-		if [[ ! -z $FCID && ! -z $MAC && ! -z ${devsec_ckey} ]];
-then
+		if [[ ! -z "$FCID" && ! -z "$MAC" && ! -z "${devsec_ckey}" ]];
+		then
 			echo "DevSec building signature into ${SIGNATURE_FILE}" | tee -a "${LOG_PATH}"
 			# This makes sure the -c "CKEY" argument does not fall apart due to spaces...
 			# in case the CKEY would contain + this needs to be changed to another character, but not \n like in many examples in the wild.
@@ -567,7 +567,7 @@ then
 			IFS=$SAVED_IFS
 			
 			if [[ $DEVSEC_SUCCESS == 0 ]];
-then
+			then
 				echo "$DEVSEC_CONTENTS" > "$(pwd)/$SIGNATURE_FILE"
 				echo "DevSec Device Signature file generated..." | tee -a "${LOG_PATH}"
 				echo "$DEVSEC_CONTENTS" > "${LOG_PATH}"
