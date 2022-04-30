@@ -120,7 +120,6 @@ swarmbuild()
 			RUNNING=false
 		fi
 
-		# if grep -q "replicated\t0/0" <<< "$DSTATUS"
 		if [[ "$(echo $DSTATUS | grep -q \"0/0\")" ]];
 		then
 			echo "Build completed."
@@ -224,7 +223,7 @@ if [ -f $CONFIG_ROOT/conf/config.json ];
 then
 # from app_config.data_root
 DATA_ROOT_X=$(cat $CONFIG_ROOT/conf/config.json | jq .data_root)
-DATA_ROOT="$(sed 's/\"//g' <<< $DATA_ROOT_X)"
+DATA_ROOT="$(echo $DATA_ROOT_X | sed 's/\"//g')"
 else
 DATA_ROOT=/mnt/data
 fi
@@ -321,7 +320,7 @@ then
     echo "host-x:        $host" | tee -a "${LOG_PATH}"
 
 	GIT_PATH=$REPO_PATH
-	REPO_PATH="$(sed 's/.git//g' <<< $GIT_PATH)"
+	REPO_PATH="$(echo $GIT_PATH | sed 's/.git//g')"
 	REPO_NAME="$(echo $url | grep / | cut -d/ -f2-)"
     echo "REPO_NAME C:   $REPO_NAME" | tee -a "${LOG_PATH}"
 	user="$(echo $OLDHOST | grep : | cut -d: -f2-)"
