@@ -110,7 +110,7 @@ swarmbuild()
 
 	while $RUNNING
 	do
-		ITERATIONS=ITERATIONS+1
+		ITERATIONS=$((ITERATIONS+1))
 		sleep 30
 
 		DSTATUS=$(docker service ls | grep  $UNIQUE_NAME)
@@ -1326,7 +1326,7 @@ MD5="0"
 if [[ ! -f "${OUTFILE}" ]];
 then
 	echo "Could not find outfile $OUTFILE..." | tee -a "${LOG_PATH}"
-	
+
 	FIND="\/mnt\/data\/deploy"
 	REPLACE="\/mnt\/gluster\/thinx\/deploy"
 	OUTFILE=$(echo "$OUTFILE" | sed "s/$FIND/$REPLACE/")
