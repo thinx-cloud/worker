@@ -20,7 +20,7 @@ set +e
 
 # Swarm Support
 
-random_string()
+randomstring()
 {
     cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w ${1:-32} | head -n 1
 }
@@ -40,7 +40,7 @@ fi
 
 BUILD_IMAGE=suculent/arduino-docker-build
 
-swarm-build()
+swarmbuild()
 {
 	#echo "Examining networks..."
 	# docker network ls returns --network cz-kgr-thinx_internal \
@@ -63,7 +63,7 @@ swarm-build()
 	FIND="\/mnt\/data\/repos"
 	REPLACE="\/mnt\/data\/thinx\/$COUNTRY\/repos"
 	WORKDIR=$(echo "$WORKDIR" | sed "s/$FIND/$REPLACE/")
-	UNIQUE_NAME="thinx_build-$(random_string 16)"
+	UNIQUE_NAME="thinx_build-$(randomstring 16)"
 
 	SERVICE_COMMAND="docker service create \
 	--restart-condition=none \
@@ -640,7 +640,7 @@ case $PLATFORM in
 					echo "[micropython] Docker completed <<<"
 				fi
 			else
-				swarm-build $WORKDIR suculent/micropython-docker-build $LOG_PATH
+				swarmbuild $WORKDIR suculent/micropython-docker-build $LOG_PATH
 			fi
 
 
@@ -760,7 +760,7 @@ case $PLATFORM in
 					fi
 					echo "[nodemcu] Docker completed <<<"
 				else
-					swarm-build $WORKDIR suculent/nodemcu-docker-build $LOG_PATH
+					swarmbuild $WORKDIR suculent/nodemcu-docker-build $LOG_PATH
 				fi
 				
 			else
@@ -825,7 +825,7 @@ case $PLATFORM in
 				fi
 				echo "[mongoose] Docker completed <<<"
 			else
-				swarm-build $WORKDIR suculent/mongoose-docker-build $LOG_PATH
+				swarmbuild $WORKDIR suculent/mongoose-docker-build $LOG_PATH
 			fi
 
 			# Exit on dry run...
@@ -891,7 +891,7 @@ case $PLATFORM in
 				#echo "PIPESTATUS ${PIPESTATUS[@]}" | tee -a "${LOG_PATH}"
 				set +o pipefail
 			else
-				swarm-build $WORKDIR suculent/arduino-docker-build $LOG_PATH
+				swarmbuild $WORKDIR suculent/arduino-docker-build $LOG_PATH
 			fi
 
 			echo "[arduino] Docker completed <<<" | tee -a "${LOG_PATH}"
@@ -996,7 +996,7 @@ case $PLATFORM in
 				#echo "PIPESTATUS ${PIPESTATUS[@]}" | tee -a "${LOG_PATH}"
 				set +o pipefail
 			else
-				swarm-build $WORKDIR suculent/pine64-docker-build $LOG_PATH
+				swarmbuild $WORKDIR suculent/pine64-docker-build $LOG_PATH
 			fi
 
 			echo "[pine64] Docker completed <<<" | tee -a "${LOG_PATH}"
@@ -1127,7 +1127,7 @@ case $PLATFORM in
 					BUILD_SUCCESS=$?
 				fi
 			else
-				swarm-build $WORKDIR suculent/platformio-docker-build $LOG_PATH
+				swarmbuild $WORKDIR suculent/platformio-docker-build $LOG_PATH
 			fi
 
 			echo "[platformio] Docker completed <<<" | tee -a "${LOG_PATH}"
