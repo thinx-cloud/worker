@@ -153,6 +153,12 @@ swarmbuild()
 			RUNNING=false
 		fi
 
+		if [[ -z "$DSTATUS" ]];
+		then
+			echo "Service failure."
+			RUNNING=false
+		fi
+
 		if [[ "$ITERATIONS" -ge "$MAX_ITERATIONS" ]];
 		then
 			echo "Build Timed Out, terminating service."
