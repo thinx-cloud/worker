@@ -1,6 +1,6 @@
 {
   "name": "build-worker",
-  "version": "1.7.110",
+  "version": "1.7.111",
   "description": "Swarm Build worker for offloading builds to another host",
   "main": "worker.js",
   "jest": {
