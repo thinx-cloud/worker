@@ -1014,7 +1014,7 @@ case $PLATFORM in
 				echo "BIN_FILE: ${BIN_FILE}" | tee -a "${LOG_PATH}"
 
 				if [[ ! -f $BIN_FILE ]];
-			then
+				then
 					echo "BIN_FILE $BIN_FILE not found!"
 					BUILD_SUCCESS=false
 					exit 1
@@ -1022,7 +1022,7 @@ case $PLATFORM in
 
 				# once again with size limit
 				if [[ -z $(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null) ]];
-			then
+				then
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
 					# ls -la | tee -a "${LOG_PATH}"
@@ -1078,7 +1078,7 @@ case $PLATFORM in
 			THINX_FILE=$( find . -name "thinx.h"  | head -n 1)
 
 			if [[ -z $THINX_FILE ]];
-then
+			then
 				echo "[pine64] WARNING! No THiNX-File found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
 				# exit 1 # will deprecate on modularization for more platforms
 			else
@@ -1086,11 +1086,11 @@ then
 				echo "[pine64] Using THiNX-File: ${THINX_FILE}" | tee -a "${LOG_PATH}"
 				ENVOUT=$(find $BUILD_PATH/$REPO_NAME -name "environment.json" | head -n 1)
 				if [[ ! -f $ENVOUT ]];
-then
+				then
 					echo "No environment.json found"
 				else
 					if [ ! -f $THINX_FILE ];
-then
+					then
 						echo "WTF THINX_FILE does not exist?"
 					else
 						echo "[pine64] Will write ENV_HASH to ${THINX_FILE}"
@@ -1136,7 +1136,8 @@ then
 				fi
 
 				# once again with size limit
-				if [[ -z "$(find $BUILD_PATH/$REPO_NAME -name "*.bin" -type f -size +10000c 2>/dev/null)" ]];
+				echo "Finding 10k> bin files in $BUILD_PATH/$REPO_NAME"
+				if [[ -z "$(find . -name '*.bin' -type f -size +10000c 2>/dev/null)" ]];
 				then
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
@@ -1291,7 +1292,8 @@ then
 				fi
 
 				# once again with size limit
-				if [[ -z "$(find $BUILD_PATH/$REPO_NAME -name \"*.bin\" -type f -size +10000c 2>/dev/null)" ]];
+				echo "Finding 10k> bin files in $BUILD_PATH/$REPO_NAME"
+				if [[ -z "$(find . -name '*.bin' -type f -size +10000c 2>/dev/null)" ]];
 				then
 					BUILD_SUCCESS=false
 					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
@@ -1301,7 +1303,6 @@ then
 					echo "Zipping artifacts to ${BUILD_ID}.zip..." | tee -a "${LOG_PATH}"
 
 					zip -rq "${BUILD_PATH}/${BUILD_ID}.zip" ${BIN_FILE} ./build/**
-
 
 					echo "Copying deployment data..." | tee -a "${LOG_PATH}"
 
