@@ -114,7 +114,7 @@ swarmbuild()
 		sleep 30
 
 		DSTATUS=$(docker service ls | grep  $UNIQUE_NAME)
-		echo $DSTATUS
+		echo "Current service status: $DSTATUS"
 
 		if [[ ! -z "$(echo ${DSTATUS} | grep -q \"1/1\")" ]];
 		then
@@ -368,17 +368,19 @@ then
 	cd $SINK
 	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 	ls -la | tee -a "${LOG_PATH}"
+	ls -la * | tee -a "${LOG_PATH}"
 else
 	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 	ls | tee -a "${LOG_PATH}"
 	echo "REPO_NAME ${REPO_NAME} does not exist, entering * instead..." | tee -a "${LOG_PATH}"
 	SINK=$BUILD_PATH/*
-	echo "Entering ${SINK}" | tee -a "${LOG_PATH}"
+	echo "Entering SINK ${SINK}" | tee -a "${LOG_PATH}"
 	if [[ -d "$SINK" ]]; 
 	then 
 		cd $SINK 
 		echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
 		ls -la | tee -a "${LOG_PATH}"
+		ls -la * | tee -a "${LOG_PATH}"
 	fi
 fi
 
@@ -695,7 +697,7 @@ case $PLATFORM in
 					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v $(pwd)/modules:/micropython/esp8266/modules --workdir /micropython/esp8266 suculent/micropython-docker-build | tee -a "${LOG_PATH}"
 					echo "${PIPESTATUS[@]}"
 					set +o pipefail
-					if [[ ! -z "$(cat ${LOG_PATH} | grep \"THiNX BUILD SUCCESSFUL\")" ]] ;
+					if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
 					then
 						BUILD_SUCCESS=true
 						echo "Zipping artifacts to ${BUILD_ID}.zip..." | tee -a "${LOG_PATH}"
@@ -835,7 +837,7 @@ case $PLATFORM in
 					docker pull suculent/nodemcu-docker-build
 					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t ${DOCKER_PARAMS} -v `pwd`:/opt/nodemcu-firmware suculent/nodemcu-docker-build build | tee -a "${LOG_PATH}"
 					echo "${PIPESTATUS[@]}"
-					if [[ ! -z "$(cat ${LOG_PATH} | grep \"THiNX BUILD SUCCESSFUL\")" ]] ;
+					if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
 					then
 						BUILD_SUCCESS=true
 						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./bin/* # zip artefacts
@@ -903,7 +905,7 @@ case $PLATFORM in
 				set -o pipefail
 				"$DCMD"
 				echo "${PIPESTATUS[@]}"
-				if [[ ! -z "$(echo ${LOG_PATH} | grep \"THiNX BUILD SUCCESSFUL\")" ]] ;
+				if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
 				then
 					if [[ -f $(pwd)/build/fw.zip ]];
 					then
@@ -1242,9 +1244,9 @@ then
 				set -o pipefail
 				docker pull suculent/platformio-docker-build
 				DCMD=$(docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v `pwd`:/opt/workspace suculent/platformio-docker-build)
-				echo $DCMD | tee -a "${LOG_PATH}"
-				echo "${PIPESTATUS[@]}"
-				if [[ ! -z "$(echo ${LOG_PATH} | grep \"THiNX BUILD SUCCESSFUL\")" ]] ;
+				echo "DCMD: $DCMD" | tee -a "${LOG_PATH}"
+				echo "PIPESTATUS: ${PIPESTATUS[@]}"
+				if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
 				then
 					BUILD_SUCCESS=true
 				else
