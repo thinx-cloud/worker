@@ -121,14 +121,15 @@ swarmbuild()
 			echo "Still running..."
 		fi
 
-		if [[ -z "$(echo ${DSTATUS} | grep -q \"task: non-zero exit\")" ]];
+		if [[ ! -z "$(echo ${DSTATUS} | grep -q \"task: non-zero exit\")" ]];
 		then
-			echo "Service task failure."
+			echo "[worker] Service task failure - non-zero exit found:"
+			echo ${DSTATUS}
 			docker service rm $UNIQUE_NAME
 			RUNNING=false
 		fi
 
-		if [[ "$(echo $DSTATUS | grep -q \"0/0\")" ]];
+		if [[ ! -z "$(echo $DSTATUS | grep -q \"0/0\")" ]];
 		then
 			echo "Build completed."
 			# append service logs to catch THINX BUILD SUCCESSFUL phrase; serves to decide to extract OUTFILE laters
