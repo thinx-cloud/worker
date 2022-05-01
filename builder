@@ -78,6 +78,7 @@ swarmbuild()
 
 	UNIQUE_NAME="thinx_build-$(randomstring 16)"
 
+	# this should use internal network, but needs to have access outside, public network may have to be externally controlled
 	SERVICE_COMMAND="docker service create \
 	--restart-condition=none \
 	--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
@@ -85,6 +86,7 @@ swarmbuild()
 	--limit-cpu=1 \
 	--replicas=1 \
 	--reserve-memory=750MB \
+	--network thinx-public \
 	--name $UNIQUE_NAME \
 	--mount type=bind,source=$WORKDIR,destination=/opt/workspace \
 	--mount type=bind,source=$DEPLOY_PATH,destination=/mnt/data/deploy \
