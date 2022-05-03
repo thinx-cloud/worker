@@ -9,7 +9,9 @@
   "scripts": {
     "test": "jest --coverage --detectOpenHandles",
     "coveralls": "cat coverage/lcov.info | coveralls",
-    "start": "node worker.js"
+    "start": "node worker.js",
+    "snyk": "snyk test",
+    "snyk-protect": "snyk-protect"
   },
   "author": "",
   "license": "ISC",
@@ -25,6 +27,10 @@
     "socket.io": "^3.0.4",
     "socket.io-client": "^3.0.4",
     "uuid": "^8.3.2"
+  },
+  "overrides": {
+    "async": "2.6.4",
+    "moment": "2.29.2"
   },
   "devDependencies": {
     "coveralls": "^3.1.1",
