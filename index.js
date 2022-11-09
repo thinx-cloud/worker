@@ -1,7 +1,3 @@
-if (typeof(process.env.SQREEN_TOKEN) !== "undefined") {
-    require('sqreen');
-}
-
 if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
     var Rollbar = require('rollbar');
     new Rollbar({

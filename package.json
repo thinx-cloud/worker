@@ -15,11 +15,12 @@
     "fs-extra": "^9.0.1",
     "node-schedule": "^1.3.2",
     "rollbar": "^2.24.0",
-    "socket.io": "^3.0.4",
-    "socket.io-client": "^3.0.4",
-    "sqreen": "^1.64.2"
+    "socket.io": "^4.5.3",
+    "socket.io-client": "^4.5.3"
   },
   "overrides": {
-    "uuid": "8.3.2"
+    "uuid": "8.3.2",
+    "socket.io-parser": "4.2.1",
+    "moment": "2.29.4"
   }
 }
