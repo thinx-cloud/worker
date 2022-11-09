@@ -1,6 +1,6 @@
 # docker build -t suculent/thinx-worker .
 
-FROM node:18-alpine
+FROM node:19-alpine
 
 LABEL name="thinxcloud/worker" version="1.7.86"
 
