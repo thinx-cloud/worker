@@ -30,7 +30,7 @@
   },
   "overrides": {
     "async": "2.6.4",
-    "moment": "2.29.2"
+    "moment": "2.29.4"
   },
   "devDependencies": {
     "coveralls": "^3.1.1",
