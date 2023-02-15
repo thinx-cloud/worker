@@ -14,6 +14,8 @@ DevSec::DevSec() {
   this->dsig_created = false;
   this->dsig_valid = false;
   this->debug = false; // never in production, affects output(!)
+  this->ssid = "";
+  this->password = "";
 }
 
 void DevSec::setDebug(bool val) {
