@@ -67,7 +67,7 @@ RUN set -x \
 VOLUME /var/lib/docker
 
 # Running npm install for production purpose will not run dev dependencies.
-RUN npm install -g npm@9.2.0 && \
+RUN npm install -g npm@9.5.0 && \
     npm install . --only-prod
 
 # Create a user group 'thinx' (problem with rights across containers)
