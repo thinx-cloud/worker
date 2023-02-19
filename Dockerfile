@@ -51,7 +51,7 @@ COPY . .
 # this may not bee needed if belongs to linter only, however it may be required by infer
 COPY ./platforms ./platforms
 
-ENV VER="20.10.12"
+ENV VER="20.10.21"
 RUN curl -sL -o /tmp/docker-$VER.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$VER.tgz && \
     tar -xz -C /tmp -f /tmp/docker-$VER.tgz && \
     rm -rf /tmp/docker-$VER.tgz && \
