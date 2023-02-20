@@ -17,8 +17,6 @@ if (exists(process.env.ROLLBAR_ACCESS_TOKEN)) {
     });
 }
 
-let Worker = require("./class.js");
-
 // Init phase off-class
 
 let srv = process.env.THINX_SERVER;
@@ -29,6 +27,9 @@ if (undef(srv)) {
 } 
 
 console.log(`${new Date().getTime()} [info] » Starting build worker against ${srv}`);
+
+const Worker = require("./class.js");
+// eslint-disable-next-line no-unused-vars
 const worker = new Worker(srv);
 
 if (exists(r)) r.info("Worker started", { context: "circle", environment: process.env.ENVIRONMENT, server: srv });
