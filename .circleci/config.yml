@@ -25,7 +25,7 @@ jobs:
             # - coveralls/upload:
             #     path_to_lcov: ./coverage/lcov.info
             #     verbose: true
-      - sonarcloud/scan
+#      - sonarcloud/scan - missing zip
 
 workflows:
 
