@@ -25,7 +25,7 @@ RUN apk update && apk upgrade
 
 COPY ./devsec-src ./devsec-src
 
-RUN apk add --no-cache \
+RUN apk update && apk add --no-cache \
     bash \
     curl \
     g++ \
