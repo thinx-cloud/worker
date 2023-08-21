@@ -27,7 +27,7 @@ RUN apk update && apk upgrade
 
 COPY ./devsec-src ./devsec-src
 
-RUN apk add --no-cache \
+RUN apk update && apk add --no-cache \
     bash \
     curl \
     g++ \
@@ -53,7 +53,7 @@ COPY . .
 # this may not bee needed if belongs to linter only, however it may be required by infer
 COPY ./platforms ./platforms
 
-ENV VER="20.10.12"
+ENV VER="20.10.21"
 RUN curl -sL -o /tmp/docker-$VER.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$VER.tgz && \
     tar -xz -C /tmp -f /tmp/docker-$VER.tgz && \
     rm -rf /tmp/docker-$VER.tgz && \
@@ -69,7 +69,7 @@ RUN set -x \
 VOLUME /var/lib/docker
 
 # Running npm install for production purpose will not run dev dependencies.
-RUN npm install -g npm@8.6.0 && \
+RUN npm install -g npm@9.5.0 && \
     npm install . --only-prod
 
 # Create a user group 'thinx' (problem with rights across containers)

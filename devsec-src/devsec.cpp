@@ -14,6 +14,8 @@ DevSec::DevSec() {
   this->dsig_created = false;
   this->dsig_valid = false;
   this->debug = false; // never in production, affects output(!)
+  this->ssid[32] = {0};
+  this->password[32] = {0};
 }
 
 void DevSec::setDebug(bool val) {
@@ -97,6 +99,12 @@ char * DevSec::unsignature(char *ckey) {
 }
 
 void DevSec::print_signature(char* ssid, char* password) {
+
+  if ((strlen(ssid) > 31) || (strlen(password) > 31)) {
+    // TODO: Fixme: extend SSID and PASSWORD string arrays thoughout the ecosystem (firmwares as well) to maximum length
+    printf("ERROR: Currrently unsupported ssid/password length.\n");
+    exit(3);
+  }
 
   strncpy(this->ssid, ssid, strlen(ssid));
   strncpy(this->password, password, strlen(password));

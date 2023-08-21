@@ -7,8 +7,10 @@
 
 void do_it(char *ckey, char* mac, char *fcid, char *ssid, char *pass, int debug) {
 
+/*
   if (debug)
     printf ("ckey = %s, mac = %s, fcid = %s, ssid = %s, pass = %s, debug = %i\n", ckey, mac, fcid, ssid, pass, debug);
+*/
 
   DevSec * sec = new DevSec();
 
@@ -157,6 +159,9 @@ int main(int argc, char *argv[])
   }
 
   if ((cvalue != NULL) && (uvalue != NULL) && (fvalue != NULL)) {
+    // makes sure svalue and pvalue are null-terminated
+    if (svalue[strlen(svalue)] != '\0') return 1;
+    if (pvalue[strlen(pvalue)] != '\0') return 1;
     do_it(cvalue, uvalue, fvalue, svalue, pvalue, (bool)dflag);
   } else {
     printf("Usage: ./devsec -c <ckey> -m <mac> -f <flash-chip-id> -s <ssid> -p <password>\n");
