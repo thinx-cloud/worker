@@ -24,8 +24,8 @@
     "helmet": "^5.0.2",
     "node-schedule": "^1.3.2",
     "rollbar": "^2.25.2",
-    "socket.io": "^4.5.3",
-    "socket.io-client": "^4.5.3",
+    "socket.io": "^4.6.1",
+    "socket.io-client": "^4.5.4",
     "uuid": "^8.3.2"
   },
   "overrides": {
