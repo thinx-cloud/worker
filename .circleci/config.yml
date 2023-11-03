@@ -2,7 +2,7 @@ version: 2.1
 
 orbs: 
   docker: circleci/docker@2.0.3
-  ggshield: gitguardian/ggshield@1.1.0
+  #ggshield: gitguardian/ggshield@1.1.0
   coveralls: coveralls/coveralls@1.0.5
   node: circleci/node@1.1.6
   sonarcloud: sonarsource/sonarcloud@1.0.3
@@ -37,16 +37,16 @@ workflows:
             - rollbar
             - sonarcloud
 
-      - ggshield/scan:
-          base_revision: << pipeline.git.base_revision >>
-          revision: << pipeline.git.revision >>
-          name: gitguardian
-          context:
-            - gitguardian
-          filters:
-            branches:
-              only:
-                - main
+      # - ggshield/scan:
+      #     base_revision: << pipeline.git.base_revision >>
+      #     revision: << pipeline.git.revision >>
+      #     name: gitguardian
+      #     context:
+      #       - gitguardian
+      #     filters:
+      #       branches:
+      #         only:
+      #           - main
 
       - docker/publish:
           name: build and publish
