@@ -3,7 +3,6 @@ version: 2.1
 orbs:
   docker: circleci/docker@2.8.0
   ggshield: gitguardian/ggshield@1.1.4
-  coveralls: coveralls/coveralls@1.0.5
   node: circleci/node@1.1.6
   sonarcloud: sonarsource/sonarcloud@1.0.3
 
@@ -21,11 +20,6 @@ jobs:
                 no_output_timeout: 1m
                 command: |
                   npm install
-            #      npm test - cannot run tests mock server is not running! this is only for integration tests with thinx-device-api
-            # - coveralls/upload:
-            #     path_to_lcov: ./coverage/lcov.info
-            #     verbose: true
-#      - sonarcloud/scan - missing zip
 
 workflows:
 
@@ -36,17 +30,6 @@ workflows:
             - coveralls-worker
             - rollbar
             - sonarcloud
-
-      # - ggshield/scan:
-      #     base_revision: << pipeline.git.base_revision >>
-      #     revision: << pipeline.git.revision >>
-      #     name: gitguardian
-      #     context:
-      #       - gitguardian
-      #     filters:
-      #       branches:
-      #         only:
-      #           - main
 
       - docker/publish:
           name: build and publish
