@@ -15,16 +15,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "chalk": "^5.3.0",
+    "chalk": "^5.6.2",
     "chmodr": "^1.2.0",
     "express": "^5.1.0",
-    "fs-extra": "^11.2.0",
+    "fs-extra": "^11.3.2",
     "helmet": "^8.1.0",
     "node-schedule": "^2.1.1",
-    "rollbar": "^2.25.2",
+    "rollbar": "^2.26.5",
     "socket.io": "^4.5.3",
     "socket.io-client": "^4.5.3",
-    "uuid": "^11.1.0"
+    "uuid": "^13.0.0"
   },
   "overrides": {
     "async": "2.6.4",
@@ -32,7 +32,7 @@
     "mkdirp": "3.0.1"
   },
   "devDependencies": {
-    "jest": "^29.4.3",
+    "jest": "^30.2.0",
     "jest-junit": "^16.0.0",
     "jest-sonar-reporter": "^2.0.0"
   }
