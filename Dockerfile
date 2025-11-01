@@ -1,8 +1,8 @@
 # docker build -t suculent/thinx-worker .
 
-FROM node:24-alpine3.20
+FROM node:25-alpine3.21
 
-LABEL name="thinxcloud/worker" version="1.7.86"
+LABEL name="thinxcloud/worker" version="1.7.167"
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
 
@@ -69,7 +69,7 @@ RUN set -x \
 VOLUME /var/lib/docker
 
 # Running npm install for production purpose will not run dev dependencies.
-RUN npm install -g npm@10.2.3 && \
+RUN npm install -g npm@11.6.2 && \
     npm install . --omit=dev
 
 # Create a user group 'thinx' (problem with rights across containers)
@@ -82,8 +82,5 @@ RUN chmod +x ./devsec
 
 # Switch to 'transformer' or 'node' user
 # USER worker problem with rights across containers)
-
-# Open the mapped port DEPRECATED! Remove after testing.
-EXPOSE 4000
 
 CMD [ "node", "worker.js" ]
