@@ -84,7 +84,7 @@ describe("Worker", () => {
                 console.log("ℹ️ [info] Worker is polling, should call runNext job with this socket ID at least once...", msg);
             });
     
-            socket.on('job-status', (job_status) => {
+            socket.on('job-status', (_job_status) => {
                 if ((typeof (this.workers[socket.id]) !== "undefined") && (this.workers[socket.id] !== null)) {
                     this.workers[socket.id].running = false;
                     console.log(`Setting worker ${this.workers[socket.id]} to not running.`);
