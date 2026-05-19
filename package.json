@@ -22,14 +22,15 @@
     "helmet": "^8.1.0",
     "node-schedule": "^2.1.1",
     "rollbar": "^2.26.5",
-    "socket.io": "^4.5.3",
-    "socket.io-client": "^4.5.3",
+    "socket.io": "^4.2.0",
+    "socket.io-client": "^4.2.0",
     "uuid": "^13.0.0"
   },
   "overrides": {
     "async": "2.6.4",
     "moment": "2.29.4",
-    "mkdirp": "3.0.1"
+    "mkdirp": "3.0.1",
+    "path-to-regexp": "8.4.0"
   },
   "devDependencies": {
     "jest": "^30.2.0",
