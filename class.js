@@ -8,6 +8,7 @@ if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
 }
 
 const exec = require("child_process");
+const crypto = require("crypto");
 const version = require('./package.json').version;
 const io = require('socket.io-client');
 const fs = require("fs-extra");
@@ -43,12 +44,8 @@ module.exports = class Worker {
         }
 
         let command = job.cmd;
-        if (command.indexOf(";") !== -1) {
-            console.log(`${new Date().getTime()} Remote command contains unexpected character ';'; this security incident should be reported.`);
-            return false;
-        }
-        if (command.indexOf("&") !== -1) {
-            console.log(`${new Date().getTime()} Remote command contains unexpected character '&'; this security incident should be reported.`);
+        if (!this.isArgumentSafe(command)) {
+            console.log(`${new Date().getTime()} Remote command contains unexpected shell metacharacters; this security incident should be reported.`);
             return false;
         }
 
@@ -62,24 +59,38 @@ module.exports = class Worker {
             return false;
         }
 
-        if (typeof(process.env.WORKER_SECRET) !== "undefined") {
-            if (typeof(job.secret) === "undefined") {
-                this.failJob(sock, job, "Missing job secret");
-                return false;
-            } else {
-                if (job.secret === null) {
-                    console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
-                    return false;
-                } else {
-                    if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
-                        this.failJob(sock, job, "Invalid job authentication");
-                        return false;
-                    } 
-                }
-            }
+        // Fail closed: a worker without a configured secret must never run remote jobs.
+        const workerSecret = process.env.WORKER_SECRET;
+        if (typeof(workerSecret) === "undefined" || workerSecret === null || workerSecret === "") {
+            console.log(`${new Date().getTime()} [critical] WORKER_SECRET is not configured; refusing job. Set WORKER_SECRET to enable authenticated builds.`);
+            return false;
+        }
+
+        if (typeof(job.secret) === "undefined" || job.secret === null) {
+            this.failJob(sock, job, "Missing job secret");
+            return false;
+        }
+
+        if (!this.secretsMatch(job.secret, workerSecret)) {
+            this.failJob(sock, job, "Invalid job authentication");
+            return false;
         }
 
         return true;
+    }
+
+    // Constant-time secret comparison to avoid timing side channels.
+    // Returns true only on exact, equal-length match.
+    secretsMatch(provided, expected) {
+        if (typeof(provided) !== "string" || typeof(expected) !== "string") {
+            return false;
+        }
+        const a = Buffer.from(provided);
+        const b = Buffer.from(expected);
+        if (a.length !== b.length) {
+            return false;
+        }
+        return crypto.timingSafeEqual(a, b);
     }
 
     runJob(sock, job) {
@@ -100,11 +111,17 @@ module.exports = class Worker {
     }
 
     isArgumentSafe(CMD) {
-        var pattern = new RegExp("(?![;&]+)");
-        return pattern.test(CMD);
+        if (typeof(CMD) !== "string") {
+            return false;
+        }
+        // Reject shell metacharacters that enable command chaining, substitution,
+        // piping or redirection. Legitimate build commands are a single program
+        // invocation with `--flag=value` arguments and contain none of these.
+        var dangerous = /[;&|`$()<>\n\r\\]/;
+        return !dangerous.test(CMD);
     }
 
-    runShell(CMD, owner, build_id, udid, path, socket) {
+    runShell(CMD, owner, build_id, udid, path, socket, callback) {
 
         // Prevent injection through git, branch
 
@@ -113,6 +130,8 @@ module.exports = class Worker {
         // Validate using whitelist regex to prevent command injection
         if (!this.isBuildIDValid(build_id)) {
             console.log(`"[OID:${owner}] [BUILD_FAILED] Owner submitted invalid request...`);
+            this.running = false; // release the guard; no build was started
+            if (typeof(callback) === "function") callback();
             return;
         }
 
@@ -126,10 +145,12 @@ module.exports = class Worker {
         // preprocess
         let tomes = CMD.split(" ");
 
-        for (let tome in tomes) {
+        for (let tome of tomes) {
             if ( (tome.indexOf("--git=") !== -1) || (tome.indexOf("--branch=") !== -1)) {
                 if (!this.isArgumentSafe(tome)) {
                     console.log(`[error] Tome ${tome} invalid, suspected command injection, exiting!`);
+                    this.running = false; // release the guard; no build was started
+                    if (typeof(callback) === "function") callback();
                     return;
                 }
             }
@@ -233,6 +254,20 @@ module.exports = class Worker {
 			}
 		}); // end shell on error data
 
+		shell.on("error", (err) => {
+            // spawn failed to launch (e.g. ENOENT); without this the 'error' event
+            // would be unhandled and the running guard would never be released.
+            console.log(`[OID:${owner}] [BUILD_FAILED] Worker failed to start build: ${err}`);
+            this.running = false;
+            socket.emit('job-status', {
+                udid: udid,
+                build_id: build_id,
+                state: "Failed",
+                reason: String(err)
+            });
+            if (typeof(callback) === "function") callback(err);
+		}); // end shell on error
+
 		shell.on("exit", (code) => {
 
             console.log(`[OID:${owner}] [BUILD_COMPLETED] with code ${code}`);
@@ -248,8 +283,12 @@ module.exports = class Worker {
             }
 
             const close_underlying_connection = true; // should be true, having it false does not help failing builds
-            socket.disconnect(close_underlying_connection);
-            
+            if (typeof(socket.disconnect) === "function") {
+                socket.disconnect(close_underlying_connection);
+            }
+
+            if (typeof(callback) === "function") callback(code);
+
 		}); // end shell on exit
 	}
 
@@ -294,21 +333,29 @@ module.exports = class Worker {
                 console.log(`${new Date().getTime()} This worker is already running... passing job ${data}`);
                 return;
             }
+            // Ignore empty payloads before dereferencing them (data.path below).
+            if (data === null || typeof(data) === "undefined") {
+                console.log(`${new Date().getTime()} [warning] Ignoring empty job payload.`);
+                return;
+            }
             // Prevent path traversal by rejecting insane values
             if (typeof(data.path) !== "undefined" && data.path.indexOf("..") !== -1) {
                 console.log(`${new Date().getTime()} [error] Invalid path (no path traversal allowed).`);
                 return;
             }
             console.log(new Date().getTime(), `» Worker has new job:`, data);
+            // runJob sets this.running = true and starts the build asynchronously
+            // (runShell uses child_process.spawn). The flag is cleared only when the
+            // build actually finishes — in shell 'exit'/'error', the fatal-stderr
+            // branch, failJob, or runShell's early validation returns. Do NOT clear it
+            // here: the build is still in progress, and clearing it would let a second
+            // job start concurrently on this worker.
             if (typeof(data.mock) === "undefined" || data.mock !== true) {
                 this.client_id = data;
                 this.runJob(socket, data);
-                this.running = false;
-                console.log(`${new Date().getTime()} [info] » Job synchronously completed.`);
             } else {
                 console.log(`${new Date().getTime()} [info] » This is a MOCK job`);
                 this.runJob(socket, data);
-                this.running = false;
             }
         });
     }

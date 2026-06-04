@@ -6,17 +6,16 @@ LABEL name="thinxcloud/worker" version="1.7.167"
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
 
+# Non-secret build configuration only. Secrets (WORKER_SECRET, ROLLBAR_ACCESS_TOKEN)
+# MUST be provided at runtime (e.g. `docker run -e WORKER_SECRET=... -e ROLLBAR_ACCESS_TOKEN=...`
+# or via a secrets manager) so they are never baked into image layers / `docker history`.
 ARG THINX_SERVER
-ARG ROLLBAR_ACCESS_TOKEN
 ARG ROLLBAR_ENVIRONMENT
-ARG WORKER_SECRET
 ARG REVISION
 ARG DATA_PATH
 
 ENV THINX_SERVER=${THINX_SERVER}
-ENV ROLLBAR_ACCESS_TOKEN=${ROLLBAR_ACCESS_TOKEN}
 ENV ROLLBAR_ENVIRONMENT=${ROLLBAR_ENVIRONMENT}
-ENV WORKER_SECRET=${WORKER_SECRET}
 ENV REVISION=${REVISION}
 ENV WORKER=1
 ENV DATA_PATH=${DATA_PATH}
