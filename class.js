@@ -121,7 +121,7 @@ module.exports = class Worker {
         return !dangerous.test(CMD);
     }
 
-    runShell(CMD, owner, build_id, udid, path, socket) {
+    runShell(CMD, owner, build_id, udid, path, socket, callback) {
 
         // Prevent injection through git, branch
 
@@ -131,6 +131,7 @@ module.exports = class Worker {
         if (!this.isBuildIDValid(build_id)) {
             console.log(`"[OID:${owner}] [BUILD_FAILED] Owner submitted invalid request...`);
             this.running = false; // release the guard; no build was started
+            if (typeof(callback) === "function") callback();
             return;
         }
 
@@ -149,6 +150,7 @@ module.exports = class Worker {
                 if (!this.isArgumentSafe(tome)) {
                     console.log(`[error] Tome ${tome} invalid, suspected command injection, exiting!`);
                     this.running = false; // release the guard; no build was started
+                    if (typeof(callback) === "function") callback();
                     return;
                 }
             }
@@ -263,6 +265,7 @@ module.exports = class Worker {
                 state: "Failed",
                 reason: String(err)
             });
+            if (typeof(callback) === "function") callback(err);
 		}); // end shell on error
 
 		shell.on("exit", (code) => {
@@ -280,8 +283,12 @@ module.exports = class Worker {
             }
 
             const close_underlying_connection = true; // should be true, having it false does not help failing builds
-            socket.disconnect(close_underlying_connection);
-            
+            if (typeof(socket.disconnect) === "function") {
+                socket.disconnect(close_underlying_connection);
+            }
+
+            if (typeof(callback) === "function") callback(code);
+
 		}); // end shell on exit
 	}
 
@@ -324,6 +331,11 @@ module.exports = class Worker {
         socket.on('job', (data) => { 
             if (this.running == true) {
                 console.log(`${new Date().getTime()} This worker is already running... passing job ${data}`);
+                return;
+            }
+            // Ignore empty payloads before dereferencing them (data.path below).
+            if (data === null || typeof(data) === "undefined") {
+                console.log(`${new Date().getTime()} [warning] Ignoring empty job payload.`);
                 return;
             }
             // Prevent path traversal by rejecting insane values

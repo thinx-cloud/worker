@@ -31,10 +31,18 @@ describe("Worker", () => {
         secret: process.env.WORKER_SECRET || null
     };
 
+    // Mock API-side handler stub: the real API parses the worker's register
+    // message here; for the mock we only need it to not throw.
+    function parseSocketMessage(_socket, _msg) { /* no-op mock */ }
+
     beforeAll((done) => {
+        that.workers = {};
         const httpServer = createServer();
         io = new Server(httpServer);
-        httpServer.listen(() => {
+        // Must listen on server_port (4000) so the worker, which connects to
+        // http://localhost:4000, actually reaches this mock server and populates
+        // that.serverSocket via the connection handler below.
+        httpServer.listen(server_port, () => {
             //const port = httpServer.address().port;
         });
         io.on("connection", (socket) => {
@@ -96,6 +104,9 @@ describe("Worker", () => {
     });
 
     afterAll(() => {
+        // Close the worker's live client socket so it stops reconnecting and does not
+        // leak an open handle (otherwise `jest --detectOpenHandles` hangs at exit).
+        if (typeof (w) !== "undefined" && w && w.socket) w.socket.close();
         if (typeof (io) !== "undefined") io.close();
     });
 
@@ -220,8 +231,20 @@ describe("Worker", () => {
         });
     });
 
-    test('socket must be closed/disconnected at the end', () => {
-        w.close();
+    test('socket must be closed/disconnected at the end', async () => {
+        // The worker connects asynchronously; wait until the connection handler has
+        // stored the server-side socket in that.serverSocket (up to ~2s).
+        await new Promise((resolve, reject) => {
+            let waited = 0;
+            const tick = setInterval(() => {
+                if (that.serverSocket) { clearInterval(tick); resolve(); }
+                else if ((waited += 25) >= 2000) { clearInterval(tick); reject(new Error("worker never connected to mock server")); }
+            }, 25);
+        });
+        expect(typeof that.serverSocket).toBe("object");
+        // A server-side socket.io Socket has no close(); disconnect(true) tears down
+        // the socket and its underlying connection.
+        that.serverSocket.disconnect(true);
     });
 
 });
