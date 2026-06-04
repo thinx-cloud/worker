@@ -130,6 +130,7 @@ module.exports = class Worker {
         // Validate using whitelist regex to prevent command injection
         if (!this.isBuildIDValid(build_id)) {
             console.log(`"[OID:${owner}] [BUILD_FAILED] Owner submitted invalid request...`);
+            this.running = false; // release the guard; no build was started
             return;
         }
 
@@ -147,6 +148,7 @@ module.exports = class Worker {
             if ( (tome.indexOf("--git=") !== -1) || (tome.indexOf("--branch=") !== -1)) {
                 if (!this.isArgumentSafe(tome)) {
                     console.log(`[error] Tome ${tome} invalid, suspected command injection, exiting!`);
+                    this.running = false; // release the guard; no build was started
                     return;
                 }
             }
@@ -250,6 +252,19 @@ module.exports = class Worker {
 			}
 		}); // end shell on error data
 
+		shell.on("error", (err) => {
+            // spawn failed to launch (e.g. ENOENT); without this the 'error' event
+            // would be unhandled and the running guard would never be released.
+            console.log(`[OID:${owner}] [BUILD_FAILED] Worker failed to start build: ${err}`);
+            this.running = false;
+            socket.emit('job-status', {
+                udid: udid,
+                build_id: build_id,
+                state: "Failed",
+                reason: String(err)
+            });
+		}); // end shell on error
+
 		shell.on("exit", (code) => {
 
             console.log(`[OID:${owner}] [BUILD_COMPLETED] with code ${code}`);
@@ -317,15 +332,18 @@ module.exports = class Worker {
                 return;
             }
             console.log(new Date().getTime(), `» Worker has new job:`, data);
+            // runJob sets this.running = true and starts the build asynchronously
+            // (runShell uses child_process.spawn). The flag is cleared only when the
+            // build actually finishes — in shell 'exit'/'error', the fatal-stderr
+            // branch, failJob, or runShell's early validation returns. Do NOT clear it
+            // here: the build is still in progress, and clearing it would let a second
+            // job start concurrently on this worker.
             if (typeof(data.mock) === "undefined" || data.mock !== true) {
                 this.client_id = data;
                 this.runJob(socket, data);
-                this.running = false;
-                console.log(`${new Date().getTime()} [info] » Job synchronously completed.`);
             } else {
                 console.log(`${new Date().getTime()} [info] » This is a MOCK job`);
                 this.runJob(socket, data);
-                this.running = false;
             }
         });
     }

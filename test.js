@@ -202,6 +202,18 @@ describe("Worker", () => {
         expect(w.secretsMatch(null, "s3cr3t")).toBe(false);
     });
 
+    test('runShell releases running guard on invalid build_id (no deadlock)', () => {
+        w.running = true;
+        w.runShell("echo hello", owner, "invalid id!", udid, path, io);
+        expect(w.running).toBe(false);
+    });
+
+    test('runShell releases running guard on unsafe --git argument (no deadlock)', () => {
+        w.running = true;
+        w.runShell("--git=http://x;rm -rf /", owner, build_id, udid, path, io);
+        expect(w.running).toBe(false);
+    });
+
     test ('runShell', (done) => {
         w.runShell(CMD, owner, build_id, udid, path, io, () => {
             done();
