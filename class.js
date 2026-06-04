@@ -8,6 +8,7 @@ if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
 }
 
 const exec = require("child_process");
+const crypto = require("crypto");
 const version = require('./package.json').version;
 const io = require('socket.io-client');
 const fs = require("fs-extra");
@@ -43,12 +44,8 @@ module.exports = class Worker {
         }
 
         let command = job.cmd;
-        if (command.indexOf(";") !== -1) {
-            console.log(`${new Date().getTime()} Remote command contains unexpected character ';'; this security incident should be reported.`);
-            return false;
-        }
-        if (command.indexOf("&") !== -1) {
-            console.log(`${new Date().getTime()} Remote command contains unexpected character '&'; this security incident should be reported.`);
+        if (!this.isArgumentSafe(command)) {
+            console.log(`${new Date().getTime()} Remote command contains unexpected shell metacharacters; this security incident should be reported.`);
             return false;
         }
 
@@ -62,24 +59,38 @@ module.exports = class Worker {
             return false;
         }
 
-        if (typeof(process.env.WORKER_SECRET) !== "undefined") {
-            if (typeof(job.secret) === "undefined") {
-                this.failJob(sock, job, "Missing job secret");
-                return false;
-            } else {
-                if (job.secret === null) {
-                    console.log(`${new Date().getTime()} Warning, JOB SECRET NULL! This will be error soon. ${job}`);
-                    return false;
-                } else {
-                    if (job.secret.indexOf(process.env.WORKER_SECRET) !== 0) {
-                        this.failJob(sock, job, "Invalid job authentication");
-                        return false;
-                    } 
-                }
-            }
+        // Fail closed: a worker without a configured secret must never run remote jobs.
+        const workerSecret = process.env.WORKER_SECRET;
+        if (typeof(workerSecret) === "undefined" || workerSecret === null || workerSecret === "") {
+            console.log(`${new Date().getTime()} [critical] WORKER_SECRET is not configured; refusing job. Set WORKER_SECRET to enable authenticated builds.`);
+            return false;
+        }
+
+        if (typeof(job.secret) === "undefined" || job.secret === null) {
+            this.failJob(sock, job, "Missing job secret");
+            return false;
+        }
+
+        if (!this.secretsMatch(job.secret, workerSecret)) {
+            this.failJob(sock, job, "Invalid job authentication");
+            return false;
         }
 
         return true;
+    }
+
+    // Constant-time secret comparison to avoid timing side channels.
+    // Returns true only on exact, equal-length match.
+    secretsMatch(provided, expected) {
+        if (typeof(provided) !== "string" || typeof(expected) !== "string") {
+            return false;
+        }
+        const a = Buffer.from(provided);
+        const b = Buffer.from(expected);
+        if (a.length !== b.length) {
+            return false;
+        }
+        return crypto.timingSafeEqual(a, b);
     }
 
     runJob(sock, job) {
@@ -100,8 +111,14 @@ module.exports = class Worker {
     }
 
     isArgumentSafe(CMD) {
-        var pattern = new RegExp("(?![;&]+)");
-        return pattern.test(CMD);
+        if (typeof(CMD) !== "string") {
+            return false;
+        }
+        // Reject shell metacharacters that enable command chaining, substitution,
+        // piping or redirection. Legitimate build commands are a single program
+        // invocation with `--flag=value` arguments and contain none of these.
+        var dangerous = /[;&|`$()<>\n\r\\]/;
+        return !dangerous.test(CMD);
     }
 
     runShell(CMD, owner, build_id, udid, path, socket) {
@@ -126,7 +143,7 @@ module.exports = class Worker {
         // preprocess
         let tomes = CMD.split(" ");
 
-        for (let tome in tomes) {
+        for (let tome of tomes) {
             if ( (tome.indexOf("--git=") !== -1) || (tome.indexOf("--branch=") !== -1)) {
                 if (!this.isArgumentSafe(tome)) {
                     console.log(`[error] Tome ${tome} invalid, suspected command injection, exiting!`);
