@@ -2,7 +2,7 @@
 
 FROM node:26.3.1-alpine3.23
 
-LABEL name="thinxcloud/worker" version="1.7.167"
+LABEL name="thinxcloud/worker" version="1.7.168"
 
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories
 
