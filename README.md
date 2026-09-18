@@ -43,6 +43,12 @@ neither Alpine `main` nor `community`, which is why the `Dockerfile` appends the
 
 ## Building in Development
 
+The image builds Docker CLI 29.8.1 from pinned, checksum-verified source with
+`golang.org/x/net v0.59.0` and `google.golang.org/grpc v1.84.0`. The build checks
+both versions in the compiled binary. Only the CLI is installed; jobs use the
+host Docker daemon through `/var/run/docker.sock`, which must be mounted into
+the worker. The image does not include a Docker daemon, containerd, or runc.
+
 ```bash
 
  docker build -t thinxcloud/worker .
