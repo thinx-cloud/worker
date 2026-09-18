@@ -3,3 +3,4 @@ test-private.sh
 .vscode
 .scannerwork
 coverage/
+test-report.xml
