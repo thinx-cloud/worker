@@ -1389,7 +1389,7 @@ if [[ -f "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ]];
 	cp -v "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" $TARGET_PATH
 fi
 
-if [[ $WORKER==1 ]];
+if [[ "$WORKER" == "1" ]];
 then
 
 # Inside Worker, we don't call notifier, but just post the results into shell... THiNX builder must then call the notifier itself (or integrate it later)

@@ -18,6 +18,28 @@ Use the `WORKER_SECRET` variable on boths sides (API/Worker) to make sure worker
 | `ROLLBAR_ACCESS_TOKEN`  | Authentication token for Rollbar (optional)     |
 | `ROLLBAR_ENVIRONMENT`   | Enviroment for Rollbar (required if token set)  |
 | `WORKER_SECRET`         | If set, jobs will be validated for this secret. |
+| `WORKER`                | Set to `1` by the image; enables `JOB-RESULT`.  |
+
+## Build Result Reporting (`jo`)
+
+`builder` does not call the THiNX notifier itself. When `WORKER` is `1` it serializes the
+build outcome into JSON with [`jo`](https://github.com/jpmens/jo) and prints it to stdout
+behind a `JOB-RESULT:` marker (`builder:1392`):
+
+```
+JOB-RESULT: {"build_id":"...","commit":"...","status":"...","sha":"...", ...}
+```
+
+`class.js` scrapes the spawned child process stdout for that marker, parses everything
+from the first `{`, and reports the result back to the API over socket.io.
+
+This is the only channel by which a build result leaves the builder, and it fails
+quietly: if the line is missing or malformed the parse throws, and the job is reported
+as `state: "Failed"` however the build actually went.
+
+`jo` is therefore a hard runtime dependency, not a build-time convenience. It ships in
+neither Alpine `main` nor `community`, which is why the `Dockerfile` appends the
+`edge/community` repository before `apk add jo`. Do not drop that line.
 
 ## Building in Development
 
