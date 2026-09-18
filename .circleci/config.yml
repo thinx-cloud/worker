@@ -38,5 +38,13 @@ workflows:
           context:
             - dockerhub
             - rollbar
+          # The Dockerfile's base image lives on dhi.io, which rejects anonymous
+          # pulls. Its auth realm delegates to registry.docker.io, so the same
+          # Docker Hub credentials the orb already uses authenticate there too.
+          before_build:
+            - run:
+                name: Log in to dhi.io for the hardened base image
+                command: |
+                  echo "$DOCKER_PASSWORD" | docker login dhi.io -u "$DOCKER_LOGIN" --password-stdin
           requires:
             - test
