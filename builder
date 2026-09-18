@@ -63,7 +63,7 @@ swarmbuild()
 	REPOS_PATH=/mnt/data/repos
 
 	# replaces /mnt/data with /mnt/gluster/thinx (or DATA_PATH if set) for Service init
-	if [[ -z "${DATA_PATH}"]]; 
+	if [[ -z "${DATA_PATH}" ]]; 
 	then
 		DATA_PATH="\/mnt\/gluster\/thinx\/"
 	fi
@@ -979,9 +979,15 @@ case $PLATFORM in
 						# prepare new header line in C
 						LINE="#define ENV_HASH \"${ENV_HASH}\""
 						# delete old line/placeholder
-						sed -i '/ENV_HASH/d' ${THINX_FILE}
+						sed -i '/ENV_HASH/d' "${THINX_FILE}"
 						# add new line with checksum
-						echo -e ${LINE} >> ${THINX_FILE}
+						# the header may not end with a newline; appending then merges
+						# the new #define into the previous line and breaks the compile
+						if [ -s "${THINX_FILE}" ] && [ -n "$(tail -c 1 "${THINX_FILE}")" ];
+						then
+							echo "" >> "${THINX_FILE}"
+						fi
+						printf '%s\n' "${LINE}" >> "${THINX_FILE}"
 						echo "THINX_FILE saved."
 					fi
 				fi
@@ -1096,8 +1102,14 @@ case $PLATFORM in
 						echo "[pine64] Will write ENV_HASH to ${THINX_FILE}"
 						ENV_HASH=$(echo ${ENVOUT} | sha256sum | awk '{ print $1 }')
 						LINE="#define ENV_HASH \"${ENV_HASH}\""
-						sed -i '/ENV_HASH/d' ${THINX_FILE}
-						echo -e ${LINE} >> ${THINX_FILE}
+						sed -i '/ENV_HASH/d' "${THINX_FILE}"
+						# the header may not end with a newline; appending then merges
+						# the new #define into the previous line and breaks the compile
+						if [ -s "${THINX_FILE}" ] && [ -n "$(tail -c 1 "${THINX_FILE}")" ];
+						then
+							echo "" >> "${THINX_FILE}"
+						fi
+						printf '%s\n' "${LINE}" >> "${THINX_FILE}"
 					fi
 				fi
 			fi
@@ -1220,8 +1232,14 @@ case $PLATFORM in
 						echo "[platformio] Will write ENV_HASH to ${THINX_FILE}"
 						ENV_HASH=$(echo ${ENVOUT} | sha256sum | awk '{ print $1 }')
 						LINE="#define ENV_HASH \"${ENV_HASH}\""
-						sed -i '/ENV_HASH/d' ${THINX_FILE}
-						echo -e ${LINE} >> ${THINX_FILE}
+						sed -i '/ENV_HASH/d' "${THINX_FILE}"
+						# the header may not end with a newline; appending then merges
+						# the new #define into the previous line and breaks the compile
+						if [ -s "${THINX_FILE}" ] && [ -n "$(tail -c 1 "${THINX_FILE}")" ];
+						then
+							echo "" >> "${THINX_FILE}"
+						fi
+						printf '%s\n' "${LINE}" >> "${THINX_FILE}"
 					fi
 				fi
 			fi
