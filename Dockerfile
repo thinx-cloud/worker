@@ -1,6 +1,6 @@
 # docker build -t suculent/thinx-worker .
 
-FROM node:26-alpine3.23
+FROM dhi.io/node:26-alpine3.24-dev
 
 LABEL name="thinxcloud/worker" version="1.7.168"
 
@@ -59,9 +59,11 @@ RUN curl -sL -o /tmp/docker-$VER.tgz https://download.docker.com/linux/static/st
    mv /tmp/docker/* /usr/bin
 
 # set up subuid/subgid so that "--userns-remap=default" works out-of-the-box
+# -G is explicit: the hardened base has no "nogroup", which busybox adduser --system
+# would otherwise fall back to.
 RUN set -x \
 	&& addgroup dockremap -g 65536 \
-	&& adduser --system dockremap -g 65536 \
+	&& adduser --system -G dockremap dockremap -g 65536 \
 	&& echo 'dockremap:165536:65536' >> /etc/subuid \
 	&& echo 'dockremap:165536:65536' >> /etc/subgid
 
