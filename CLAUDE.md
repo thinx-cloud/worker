@@ -42,7 +42,10 @@ Keep them strict.
 
 ## Testing
 
-`npm test` (Jest). Two pre-existing tests fail independently of feature work:
-`runShell` (`chmodr is not a function`) and `socket must be closed`
-(`w.close is not a function` — no `close()` method exists on `Worker`). These are
-known broken tests, not regressions.
+`npm test` (Jest). The full suite passes (22/22 as of 2026-09-18). A green run is
+the baseline — treat any failure as a regression from your own change.
+
+The two long-standing failures noted here previously (`runShell` /
+`chmodr is not a function`, and `socket must be closed` / `w.close is not a
+function`) are both fixed. `Worker` still has no `close()`; the socket test now
+calls `disconnect(true)` on the server-side socket instead.
