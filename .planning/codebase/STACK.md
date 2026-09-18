@@ -70,7 +70,7 @@
 - Internal: `WORKER=1` - Always set to 1 in Docker image
 
 **Build:**
-- `Dockerfile` - Multi-stage Alpine build; installs system tools (git, jq, jo, make, gcc, curl, zip), compiles DevSec C++ binary, installs Docker CLI 20.10.21 for Docker-in-Docker builds
+- `Dockerfile` - Multi-stage Alpine build; installs system tools (git, jq, jo, make, gcc, curl, zip), compiles DevSec C++ binary, installs Docker CLI 29.8.1 for Docker-in-Docker builds
 - `.dockerignore` - Excludes files from Docker build context
 
 ## Platform Requirements

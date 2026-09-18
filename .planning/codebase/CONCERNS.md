@@ -100,7 +100,7 @@ So the `class.js` Rollbar init reads a variable (`ROLLBAR_TOKEN`) that is never 
 
 ## Supply chain / build
 
-- **Docker binary pinned + arch-locked.** `Dockerfile:56-60` curls the docker `20.10.21` static binary for `x86_64` only over the network at build time — fails or mismatches on arm64 hosts, and is an unverified download (no checksum).
+- **Docker binary pinned + arch-locked.** `Dockerfile:55-59` curls the docker `29.8.1` static binary for `x86_64` only over the network at build time — fails or mismatches on arm64 hosts, and is an unverified download (no checksum).
 - **`edge/community` repo added** (`Dockerfile:7`) pulls from Alpine edge, which is a moving target and can break reproducibility.
 - **`npm install . --omit=dev`** (`Dockerfile:73`) — no lockfile (`package-lock.json` not present in repo root listing) means non-reproducible dependency resolution.
 

@@ -100,7 +100,7 @@
 **Build command execution:**
 - Worker spawns shell subprocesses (`child_process.spawn`) to run firmware build scripts
 - The `builder` script path is rewritten to `/opt/thinx/thinx-device-api/builder` (`class.js` `runShell`)
-- Docker CLI 20.10.21 is installed inside the image (`Dockerfile`) to allow builds that themselves invoke Docker
+- Docker CLI 29.8.1 is installed inside the image (`Dockerfile`) to allow builds that themselves invoke Docker
 - `VOLUME /var/lib/docker` declared in `Dockerfile` for Docker daemon storage
 
 ---
