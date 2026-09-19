@@ -35,6 +35,11 @@ workflows:
           name: build and publish
           image: thinxcloud/worker
           tag: latest
+          # Publish only from main. Without this the job runs on every branch,
+          # so any feature-branch push overwrites the production :latest tag.
+          filters:
+            branches:
+              only: main
           context:
             - dockerhub
             - rollbar
