@@ -243,15 +243,25 @@ module.exports = class Worker {
 
 		shell.stderr.on("data", (data) => {
 			let ddstring = data.toString();
-			if (ddstring.indexOf("fatal:") !== -1) {
-                this.running = false;
-                socket.emit('job-status', {
-                    udid: udid,
-                    build_id: build_id, 
-                    state: "Failed",
-                    reason: ddstring
-                });
-			}
+
+			// Keep the latest stderr so the exit handler below reports a real
+			// reason instead of the "unknown" placeholder.
+			dstring = ddstring;
+
+			// Do NOT fail the build just because stderr contains "fatal:".
+			// Benign git output matches it constantly:
+			//   `git describe --abbrev=0 --tags` on a repo with no tags prints
+			//     fatal: No names found, cannot describe anything.
+			//   which getTag() already handles by returning "1.0", and every
+			//   SSH key that is not the right one prints
+			//     fatal: Could not read from remote repository.
+			//   before the next key succeeds.
+			// This handler used to emit state:"Failed" AND clear this.running
+			// mid-build, so a build that went on to compile successfully was
+			// recorded as failed, no firmware was registered, and the worker
+			// was handed back to the queue while it was still busy. The exit
+			// code decides the outcome -- see shell.on("exit") below.
+			console.log(`[OID:${owner}] [BUILD_STDERR] ${ddstring.trim()}`);
 		}); // end shell on error data
 
 		shell.on("error", (err) => {
