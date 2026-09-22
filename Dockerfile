@@ -93,8 +93,27 @@ RUN set -x \
 VOLUME /var/lib/docker
 
 # Running npm install for production purpose will not run dev dependencies.
-# npm is not pinned here; the base image ships a current npm.
-RUN npm install . --omit=dev
+#
+# npm is a build-time tool only and is removed in the same layer it was used
+# in — a later `rm` would leave it in the earlier layer and save nothing. This
+# mirrors the main Dockerfile.
+#
+# Safe because the runtime never calls it: CMD is `node worker.js`, and nothing
+# under services/worker shells out to npm or npx (the only subprocess is
+# runShell -> ./builder in class.js). builders/install-tools.sh does run
+# `npm install eslint`, but that executes inside the separate builder images
+# (arduino/platformio/...), not here.
+#
+# Both copies go: /usr/local (if present) and /usr/lib (from the base image),
+# plus the ~/.npm cache. This also removes npm's vendored brace-expansion,
+# which is what Aikido flags at
+# usr/lib/node_modules/npm/node_modules/brace-expansion — no npm release
+# currently bundles a fixed (>=5.0.11) copy, so removal is the only fix.
+RUN npm install . --omit=dev \
+ && npm cache clean --force \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+           /usr/lib/node_modules/npm /usr/bin/npm /usr/bin/npx \
+           /root/.npm
 
 # Create a user group 'thinx' (problem with rights across containers)
 # RUN addgroup -S thinx && \
