@@ -14,13 +14,13 @@ RUN curl -fSL https://codeload.github.com/docker/cli/tar.gz/477f1252f2391a2b34fd
 # Upstream uses vendor.mod instead of go.mod. Build in module mode so the
 # requested versions replace the vendored dependencies and remain auditable.
 RUN cp vendor.mod go.mod && cp vendor.sum go.sum \
-    && go get golang.org/x/net@v0.59.0 google.golang.org/grpc@v1.84.0 \
+    && go get golang.org/x/net@v0.59.0 google.golang.org/grpc@v1.85.0-dev.0.20260825072537-93e31b48545e \
     && CGO_ENABLED=0 go build -mod=mod -trimpath -tags grpcnotrace \
        -ldflags "-s -w -X github.com/docker/cli/cli/version.Version=29.8.1 -X github.com/docker/cli/cli/version.GitCommit=477f125-deps" \
        -o /out/docker ./cmd/docker \
     && go version -m /out/docker | awk '\
        $1 == "dep" && $2 == "golang.org/x/net" { net = ($3 == "v0.59.0") } \
-       $1 == "dep" && $2 == "google.golang.org/grpc" { grpc = ($3 == "v1.84.0") } \
+       $1 == "dep" && $2 == "google.golang.org/grpc" { grpc = ($3 == "v1.85.0-dev.0.20260825072537-93e31b48545e") } \
        END { exit !(net && grpc) }' \
     && /out/docker --version \
     && /out/docker run --help >/dev/null \
