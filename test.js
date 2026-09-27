@@ -2,6 +2,8 @@
 
 const { createServer } = require("http");
 const { Server } = require("socket.io");
+const EventEmitter = require("events");
+const child_process = require("child_process");
 
 const Worker = require('./class.js');
 
@@ -228,6 +230,139 @@ describe("Worker", () => {
     test ('runShell', (done) => {
         w.runShell(CMD, owner, build_id, udid, path, io, () => {
             done();
+        });
+    });
+
+    // SEC-EXEC-02 (D-02, D-04): a job carrying `argv` must reach the builder
+    // program without a shell, and the program is always the worker's own
+    // constant, never something named by the job. child_process.spawn is
+    // spied on the shared module object, which class.js calls through.
+    describe('argv jobs (SEC-EXEC-02)', () => {
+
+        const BUILDER = "/opt/thinx/thinx-device-api/builder";
+        const SPEC_SECRET = "spec-secret";
+        const ARGV_OWNER = "0123456789abcdef".repeat(4);
+        const ARGV_UDID = "a80cc610-4faf-11e7-9a9c-41d4f7ab4083";
+        const ARGV_BUILD_ID = "abcd-1234";
+
+        let spawnSpy, savedSecret, fakeSock;
+
+        const validArgv = () => [
+            "--owner=" + ARGV_OWNER,
+            "--udid=" + ARGV_UDID,
+            "--git=https://github.com/o/r.git",
+            "--branch=main",
+            "--id=" + ARGV_BUILD_ID,
+            "--workdir=/mnt/data/repos/x",
+            "--dry-run"
+        ];
+
+        const argvJob = (argv, extra) => Object.assign({
+            build_id: ARGV_BUILD_ID,
+            owner: ARGV_OWNER,
+            udid: ARGV_UDID,
+            path: BUILD_PATH,
+            secret: SPEC_SECRET,
+            argv: argv
+        }, extra || {});
+
+        // A child that never emits: the handlers attach, nothing runs.
+        const fakeChild = () => {
+            const child = new EventEmitter();
+            child.stdout = new EventEmitter();
+            child.stderr = new EventEmitter();
+            return child;
+        };
+
+        // True when any argument of any spawn call asks for a shell.
+        const anyShellSpawn = () => spawnSpy.mock.calls.some((call) =>
+            call.some((arg) => arg !== null && typeof arg === "object" && !Array.isArray(arg) && arg.shell === true));
+
+        beforeEach(() => {
+            savedSecret = process.env.WORKER_SECRET;
+            process.env.WORKER_SECRET = SPEC_SECRET;
+            spawnSpy = jest.spyOn(child_process, "spawn").mockImplementation(() => fakeChild());
+            fakeSock = { emit: jest.fn() };
+            w.running = false;
+        });
+
+        afterEach(() => {
+            spawnSpy.mockRestore();
+            if (typeof savedSecret === "undefined") {
+                delete process.env.WORKER_SECRET;
+            } else {
+                process.env.WORKER_SECRET = savedSecret;
+            }
+            w.running = false;
+        });
+
+        test('(a) argv job spawns the constant builder program with shell:false', () => {
+            const argv = validArgv();
+            w.runJob(fakeSock, argvJob(argv));
+            expect(spawnSpy).toHaveBeenCalledTimes(1);
+            expect(spawnSpy).toHaveBeenCalledWith(BUILDER, argv, { shell: false });
+            expect(anyShellSpawn()).toBe(false);
+        });
+
+        test('(b) a job with both argv and cmd runs argv only; cmd is ignored', () => {
+            const argv = validArgv();
+            w.runJob(fakeSock, argvJob(argv, { cmd: "echo SHOULD-NOT-RUN" }));
+            expect(spawnSpy).toHaveBeenCalledTimes(1);
+            expect(spawnSpy).toHaveBeenCalledWith(BUILDER, argv, { shell: false });
+            expect(anyShellSpawn()).toBe(false);
+            expect(spawnSpy.mock.calls.flat()).not.toContain("echo SHOULD-NOT-RUN");
+        });
+
+        test.each([
+            ["an empty array", []],
+            ["a non-array argv", "--owner=x"],
+            ["a non-string element", [42]],
+            ["a program named by the job", ["/bin/sh", "-c", "id"]],
+            ["a shell metacharacter in --git", ["--git=http://x;rm -rf /"]],
+            ["an unknown flag", ["--unknown=1"]],
+            ["command substitution in --env", ["--env={\"a\":\"$(id)\"}"]]
+        ])('(c) argv with %s is refused with "Invalid argv" and nothing is spawned', (_label, argv) => {
+            w.runJob(fakeSock, argvJob(argv));
+            expect(spawnSpy).not.toHaveBeenCalled();
+            expect(fakeSock.emit).toHaveBeenCalledWith("job-status",
+                expect.objectContaining({ status: "Failed", details: "Invalid argv" }));
+            expect(w.running).toBe(false);
+        });
+
+        test('argv job still needs a matching job secret', () => {
+            w.runJob(fakeSock, argvJob(validArgv(), { secret: "wrong-secret" }));
+            expect(spawnSpy).not.toHaveBeenCalled();
+            expect(fakeSock.emit).toHaveBeenCalledWith("job-status",
+                expect.objectContaining({ details: "Invalid job authentication" }));
+        });
+
+        test('argv job still needs a build_id', () => {
+            w.runJob(fakeSock, argvJob(validArgv(), { build_id: undefined }));
+            expect(spawnSpy).not.toHaveBeenCalled();
+            expect(fakeSock.emit).toHaveBeenCalledWith("job-status",
+                expect.objectContaining({ details: "Missing build_id" }));
+        });
+
+        test('argv job is refused when WORKER_SECRET is not configured (fail closed)', () => {
+            delete process.env.WORKER_SECRET;
+            w.runJob(fakeSock, argvJob(validArgv()));
+            expect(spawnSpy).not.toHaveBeenCalled();
+        });
+
+        test('(d) runArgv releases the running guard on an invalid build_id and spawns nothing', () => {
+            expect(typeof w.runArgv).toBe("function");
+            w.running = true;
+            w.runArgv(validArgv(), ARGV_OWNER, "invalid id!", ARGV_UDID, BUILD_PATH, fakeSock);
+            expect(w.running).toBe(false);
+            expect(spawnSpy).not.toHaveBeenCalled();
+        });
+
+        test('runArgv re-validates argv before spawning (defence in depth)', () => {
+            expect(typeof w.runArgv).toBe("function");
+            w.running = true;
+            w.runArgv(["/bin/sh", "-c", "id"], ARGV_OWNER, ARGV_BUILD_ID, ARGV_UDID, BUILD_PATH, fakeSock);
+            expect(w.running).toBe(false);
+            expect(spawnSpy).not.toHaveBeenCalled();
         });
     });
 
