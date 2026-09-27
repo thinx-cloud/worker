@@ -13,6 +13,18 @@ const version = require('./package.json').version;
 const io = require('socket.io-client');
 const fs = require("fs-extra");
 const chmodr = require('chmodr');
+
+// The worker owns the program path (SEC-EXEC-02, D-04). An argv job carries
+// arguments only, so the API can never name what runs on this root +
+// docker.sock host; the program is always this constant.
+const BUILDER_PROGRAM = "/opt/thinx/thinx-device-api/builder";
+
+// The flags the API emits (lib/thinx/builder.js buildArgs), plus the bare
+// `--dry-run`. The bash builder also parses --alias and --open, but the API
+// never sends them, so they stay refused. A new builder flag in the API needs
+// a worker release first, or its jobs fail with "Invalid argv".
+const ALLOWED_ARGV_FLAGS = ["owner", "udid", "fcid", "mac", "git", "branch", "id", "workdir", "env"];
+
 module.exports = class Worker {
 
     constructor(build_server) {
@@ -38,15 +50,23 @@ module.exports = class Worker {
 
     validateJob(sock, job) {
 
-        if (typeof(job.cmd) === "undefined") {
+        if (typeof(job.argv) !== "undefined") {
+            // A job that carries argv at all is an argv job: a malformed argv is
+            // refused, never retried through the legacy cmd shell path.
+            if (!Array.isArray(job.argv) || !this.validateArgv(job.argv)) {
+                this.failJob(sock, job, "Invalid argv");
+                console.log(`${new Date().getTime()} Remote command contains unexpected shell metacharacters; this security incident should be reported.`);
+                return false;
+            }
+        } else if (typeof(job.cmd) === "undefined") {
             this.failJob(sock, job, "Missing command");
             return false;
-        }
-
-        let command = job.cmd;
-        if (!this.isArgumentSafe(command)) {
-            console.log(`${new Date().getTime()} Remote command contains unexpected shell metacharacters; this security incident should be reported.`);
-            return false;
+        } else {
+            let command = job.cmd;
+            if (!this.isArgumentSafe(command)) {
+                console.log(`${new Date().getTime()} Remote command contains unexpected shell metacharacters; this security incident should be reported.`);
+                return false;
+            }
         }
 
         if (typeof(job.build_id) === "undefined") {
@@ -98,7 +118,12 @@ module.exports = class Worker {
         if (this.validateJob(sock, job)) {
             console.log(`${new Date().getTime()} Setting worker to running...`);
             this.running = true;
-            this.runShell(job.cmd, job.owner, job.build_id, job.udid, job.path, sock);
+            if (Array.isArray(job.argv)) {
+                // argv wins: when a job carries both, cmd is ignored.
+                this.runArgv(job.argv, job.owner, job.build_id, job.udid, job.path, sock);
+            } else {
+                this.runShell(job.cmd, job.owner, job.build_id, job.udid, job.path, sock);
+            }
         } else {
             console.log(`${new Date().getTime()} [critical] Job validation failed on this worker. Developer error, or attack attempt. No shell will be run.`);
         }
@@ -119,6 +144,66 @@ module.exports = class Worker {
         // invocation with `--flag=value` arguments and contain none of these.
         var dangerous = /[;&|`$()<>\n\r\\]/;
         return !dangerous.test(CMD);
+    }
+
+    // SEC-EXEC-02 (D-02): every argv element must be a string that is either the
+    // bare `--dry-run` or `--<name>=<value>` with <name> in ALLOWED_ARGV_FLAGS, and
+    // must pass isArgumentSafe. shell:false already stops the metacharacters from
+    // reaching a shell here, but the bash builder later evals parsed YAML and may
+    // interpolate these values, and the legacy path refused the same characters
+    // over the whole command string, so the acceptance set stays exactly the same.
+    // An element that does not start with `--` (e.g. a program path) is refused:
+    // the job can never name the program.
+    validateArgv(argv) {
+        if (!Array.isArray(argv) || argv.length === 0) {
+            return false;
+        }
+        for (let arg of argv) {
+            if (typeof(arg) !== "string") {
+                return false;
+            }
+            if (arg !== "--dry-run") {
+                let match = /^--([a-z]+)=/.exec(arg);
+                if (match === null || ALLOWED_ARGV_FLAGS.indexOf(match[1]) === -1) {
+                    return false;
+                }
+            }
+            if (!this.isArgumentSafe(arg)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    runArgv(argv, owner, build_id, udid, path, socket, callback) {
+
+        // Validate using whitelist regex to prevent command injection
+        if (!this.isBuildIDValid(build_id)) {
+            console.log(`"[OID:${owner}] [BUILD_FAILED] Owner submitted invalid request...`);
+            this.running = false; // release the guard; no build was started
+            if (typeof(callback) === "function") callback();
+            return;
+        }
+
+        // Sanitize against path traversal
+        build_id = build_id.replace(/\./g, '');
+        build_id = build_id.replace(/\\/g, '');
+        build_id = build_id.replace(/\//g, '');
+
+        // Defence in depth: validateJob already checked argv, but runArgv must
+        // never spawn an argv it has not validated itself.
+        if (!this.validateArgv(argv)) {
+            console.log(`[error] argv invalid, suspected command injection, exiting!`);
+            this.running = false; // release the guard; no build was started
+            if (typeof(callback) === "function") callback();
+            return;
+        }
+
+        console.log(`"[OID:${owner}] [BUILD_STARTED] Worker started...`);
+        console.log(`[info] worker runArgv ${argv.join(" ")}`);
+
+        let shell = exec.spawn(BUILDER_PROGRAM, argv, { shell: false });
+        this.attachBuildHandlers(shell, owner, build_id, udid, path, socket, callback);
     }
 
     runShell(CMD, owner, build_id, udid, path, socket, callback) {
@@ -161,6 +246,15 @@ module.exports = class Worker {
         
         // deepcode ignore CommandInjection: this is expected functionality, risk should be accepted.
         let shell = exec.spawn(command, { shell: true }); // lgtm [js/command-line-injection]
+        this.attachBuildHandlers(shell, owner, build_id, udid, path, socket, callback);
+    }
+
+    // Wires the build child process to the API: log streaming, JOB-RESULT parsing,
+    // the build.log append, the Failed status on a non-zero exit, the socket
+    // disconnect and the release of the running guard. Shared by runShell (legacy
+    // cmd) and runArgv, so both paths report a build identically.
+    attachBuildHandlers(shell, owner, build_id, udid, path, socket, callback) {
+
         let build_start = new Date().getTime();
 
 		shell.stdout.on("data", (data) => {
