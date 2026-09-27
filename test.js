@@ -4,6 +4,7 @@ const { createServer } = require("http");
 const { Server } = require("socket.io");
 const EventEmitter = require("events");
 const child_process = require("child_process");
+const util = require("util");
 
 const Worker = require('./class.js');
 
@@ -364,6 +365,77 @@ describe("Worker", () => {
             expect(w.running).toBe(false);
             expect(spawnSpy).not.toHaveBeenCalled();
         });
+
+        // D-03: a cmd-only job still runs (old API images), and says so once in
+        // the log. When worker logs stop showing this line, cmd can be dropped.
+        // The log-hygiene cases below keep the job secret and the custom env
+        // JSON out of the worker log (T-23-13).
+
+        const logLinesOf = (logSpy) => logSpy.mock.calls.map((call) => util.format(...call));
+
+        const waitFor = (predicate, timeoutMs) => new Promise((resolve, reject) => {
+            let waited = 0;
+            const tick = setInterval(() => {
+                if (predicate()) { clearInterval(tick); resolve(); }
+                else if ((waited += 25) >= timeoutMs) { clearInterval(tick); reject(new Error("condition not met in time")); }
+            }, 25);
+        });
+
+        test('legacy cmd-only job logs one warning with its build_id and still runs through the shell path', () => {
+            const logSpy = jest.spyOn(console, "log");
+            try {
+                w.runJob(fakeSock, { cmd: "echo hello", build_id: ARGV_BUILD_ID, udid: "u", secret: SPEC_SECRET });
+                const warnings = logLinesOf(logSpy).filter((line) => line.includes("legacy cmd-only job"));
+                expect(warnings.length).toBe(1);
+                expect(warnings[0]).toContain(ARGV_BUILD_ID);
+                expect(warnings[0]).not.toContain(SPEC_SECRET);
+                expect(warnings[0]).not.toContain("echo hello");
+                expect(spawnSpy).toHaveBeenCalledTimes(1);
+                expect(spawnSpy).toHaveBeenCalledWith("echo hello", { shell: true });
+            } finally {
+                logSpy.mockRestore();
+            }
+        });
+
+        test('argv job logs no legacy warning', () => {
+            const logSpy = jest.spyOn(console, "log");
+            try {
+                w.runJob(fakeSock, argvJob(validArgv()));
+                expect(spawnSpy).toHaveBeenCalledTimes(1);
+                expect(logLinesOf(logSpy).some((line) => line.includes("legacy cmd-only job"))).toBe(false);
+            } finally {
+                logSpy.mockRestore();
+            }
+        });
+
+        test('runArgv logs the argv without the --env payload', () => {
+            const argv = validArgv().concat(["--env={\"WIFI_PASS\":\"hunter2\"}"]);
+            const logSpy = jest.spyOn(console, "log");
+            try {
+                w.runJob(fakeSock, argvJob(argv));
+                expect(spawnSpy).toHaveBeenCalledWith(BUILDER, argv, { shell: false });
+                const lines = logLinesOf(logSpy);
+                expect(lines.some((line) => line.includes("hunter2"))).toBe(false);
+                expect(lines.some((line) => line.includes("worker runArgv") && line.includes("--env=<redacted>"))).toBe(true);
+            } finally {
+                logSpy.mockRestore();
+            }
+        });
+
+        test('the socket job handler never logs the job secret', async () => {
+            // The worker connects asynchronously; the earlier io.emit cases are
+            // fire-and-forget, so wait for a live connection before emitting.
+            await waitFor(() => w.socket.connected && typeof that.serverSocket === "object", 8000);
+            const logSpy = jest.spyOn(console, "log");
+            try {
+                io.emit("job", { mock: true, build_id: ARGV_BUILD_ID, udid: ARGV_UDID, argv: validArgv(), secret: "leak-me-please" });
+                await waitFor(() => logLinesOf(logSpy).some((line) => line.includes("Worker has new job")), 3000);
+                expect(logLinesOf(logSpy).some((line) => line.includes("leak-me-please"))).toBe(false);
+                expect(spawnSpy).not.toHaveBeenCalled(); // wrong secret: refused
+            } finally {
+                logSpy.mockRestore();
+            }
+        }, 15000);
     });
 
     test('socket must be closed/disconnected at the end', async () => {
