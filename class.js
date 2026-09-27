@@ -122,6 +122,10 @@ module.exports = class Worker {
                 // argv wins: when a job carries both, cmd is ignored.
                 this.runArgv(job.argv, job.owner, job.build_id, job.udid, job.path, sock);
             } else {
+                // D-03 removal signal: once worker logs stop showing this line, no
+                // API sends cmd-only jobs any more and cmd + the shell path can go.
+                // build_id only: never the secret, never the cmd (it may carry env JSON).
+                console.log(`${new Date().getTime()} [warning] legacy cmd-only job ${job.build_id}: the API sent no argv; running through the shell path`);
                 this.runShell(job.cmd, job.owner, job.build_id, job.udid, job.path, sock);
             }
         } else {
@@ -200,7 +204,10 @@ module.exports = class Worker {
         }
 
         console.log(`"[OID:${owner}] [BUILD_STARTED] Worker started...`);
-        console.log(`[info] worker runArgv ${argv.join(" ")}`);
+        // --env carries the owner's custom environment variables as JSON, which
+        // may hold credentials, so its value stays out of the log.
+        let loggable = argv.map((arg) => (arg.indexOf("--env=") === 0) ? "--env=<redacted>" : arg);
+        console.log(`[info] worker runArgv ${loggable.join(" ")}`);
 
         let shell = exec.spawn(BUILDER_PROGRAM, argv, { shell: false });
         this.attachBuildHandlers(shell, owner, build_id, udid, path, socket, callback);
@@ -245,7 +252,7 @@ module.exports = class Worker {
         let command = tomes.join(" ");
         
         // deepcode ignore CommandInjection: this is expected functionality, risk should be accepted.
-        let shell = exec.spawn(command, { shell: true }); // lgtm [js/command-line-injection]
+        let shell = exec.spawn(command, { shell: true });
         this.attachBuildHandlers(shell, owner, build_id, udid, path, socket, callback);
     }
 
@@ -311,19 +318,19 @@ module.exports = class Worker {
             }
 
             // Something must write to build_path/build.log where the file is tailed from to websocket...
-            var build_log_path = path + "/" + build_id.replace(/\//g, '\\\\') + "/build.log"; // lgtm [js/path-injection]
-            fs.ensureFile(build_log_path, function (err) { // lgtm [js/path-injection]
+            var build_log_path = path + "/" + build_id.replace(/\//g, '\\\\') + "/build.log";
+            fs.ensureFile(build_log_path, function (err) {
                 if (err) {
                     console.log(`[error] Log file could not be created: ${err}`);
                 } else {
                     // deepcode ignore PT: it's expected to be allowed to limit access
-                    fs.fchmodSync(fs.openSync(build_log_path), 0o665); // lgtm [js/path-injection]
+                    fs.fchmodSync(fs.openSync(build_log_path), 0o665);
                     chmodr(path + "/" + build_id, 0o665, (cherr) => {
                         if (cherr) {
                             console.log(`[error] Failed to execute chmodr ${cherr}`);
                         } else {
                             // deepcode ignore PT: the path is internally built
-                            fs.appendFileSync(build_log_path, logline); // lgtm [js/path-injection]
+                            fs.appendFileSync(build_log_path, logline);
                         }
                     });
                 }
@@ -447,7 +454,12 @@ module.exports = class Worker {
                 console.log(`${new Date().getTime()} [error] Invalid path (no path traversal allowed).`);
                 return;
             }
-            console.log(new Date().getTime(), `» Worker has new job:`, data);
+            // The job secret authenticates the API (WORKER_SECRET); never log it.
+            let loggable = data;
+            if (typeof(data) === "object" && typeof(data.secret) !== "undefined") {
+                loggable = Object.assign({}, data, { secret: "<redacted>" });
+            }
+            console.log(new Date().getTime(), `» Worker has new job:`, loggable);
             // runJob sets this.running = true and starts the build asynchronously
             // (runShell uses child_process.spawn). The flag is cleared only when the
             // build actually finishes — in shell 'exit'/'error', the fatal-stderr
