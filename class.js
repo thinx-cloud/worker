@@ -56,11 +56,20 @@ module.exports = class Worker {
     // Main Logic
     //
 
+    // Reports a refused job back to the API. Only the identifying fields go
+    // back: the job itself carries the plaintext job secret (WORKER_SECRET),
+    // the argv with the owner's --env JSON, and the legacy cmd with the same
+    // JSON, and the API logs every job-status it receives (T-23-13). Never
+    // echo the job object.
     failJob(sock, job, details) {
-        let copy = JSON.parse(JSON.stringify(job));
-        copy.status = "Failed";
-        copy.details = details;
-        sock.emit('job-status', copy);
+        const source = ((job !== null) && (typeof(job) === "object")) ? job : {};
+        sock.emit('job-status', {
+            build_id: source.build_id,
+            udid: source.udid,
+            owner: source.owner,
+            status: "Failed",
+            details: details
+        });
         this.running = false;
     }
 

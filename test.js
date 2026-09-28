@@ -473,6 +473,72 @@ describe("Worker", () => {
                 logSpy.mockRestore();
             }
         }, 15000);
+
+        // Review iteration 2, WR-01: failJob used to echo the whole job back as
+        // job-status, and the API logs every job-status it receives. The echo
+        // must carry identifying fields only: never the job secret, the argv
+        // (--env JSON) or the legacy cmd.
+
+        const FAIL_KEYS = ["build_id", "details", "owner", "status", "udid"];
+        const ENV_ARG = "--env={\"WIFI_PASS\":\"hunter2\"}";
+
+        test('failJob echoes only build_id, udid, owner, status and details', () => {
+            w.running = true;
+            w.failJob(fakeSock, argvJob(validArgv().concat([ENV_ARG]), {
+                secret: "leak-me-please",
+                cmd: "./builder '" + ENV_ARG + "'",
+                source_id: "sid",
+                mock: false
+            }), "Invalid job authentication");
+            expect(fakeSock.emit).toHaveBeenCalledTimes(1);
+            const [event, payload] = fakeSock.emit.mock.calls[0];
+            expect(event).toBe("job-status");
+            expect(Object.keys(payload).sort()).toEqual(FAIL_KEYS);
+            expect(payload).toEqual({
+                build_id: ARGV_BUILD_ID,
+                udid: ARGV_UDID,
+                owner: ARGV_OWNER,
+                status: "Failed",
+                details: "Invalid job authentication"
+            });
+            expect(w.running).toBe(false);
+        });
+
+        test('failJob tolerates a job that is not an object', () => {
+            w.failJob(fakeSock, null, "Missing command");
+            expect(fakeSock.emit).toHaveBeenCalledWith("job-status",
+                expect.objectContaining({ status: "Failed", details: "Missing command" }));
+        });
+
+        const statusFromServer = (timeoutMs) => new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error("no job-status reached the server")), timeoutMs);
+            that.serverSocket.once("job-status", (payload) => { clearTimeout(timer); resolve(payload); });
+        });
+
+        test.each([
+            ["a wrong job secret", { secret: "wrong-secret" }, validArgv(), "Invalid job authentication"],
+            ["an invalid argv", { secret: SPEC_SECRET }, validArgv().concat(["--unknown=1"]), "Invalid argv"]
+        ])('the job-status the API receives for %s carries no secret, argv, cmd or --env payload', async (_label, extra, argv, details) => {
+            await waitFor(() => w.socket.connected && typeof that.serverSocket === "object", 8000);
+            const received = statusFromServer(3000);
+            io.emit("job", Object.assign({
+                mock: true,
+                build_id: ARGV_BUILD_ID,
+                udid: ARGV_UDID,
+                owner: ARGV_OWNER,
+                path: BUILD_PATH,
+                argv: argv.concat([ENV_ARG]),
+                cmd: "./builder --id=" + ARGV_BUILD_ID + " '" + ENV_ARG + "'"
+            }, extra));
+            const payload = await received;
+            expect(payload.details).toBe(details);
+            expect(Object.keys(payload).sort()).toEqual(FAIL_KEYS);
+            const wire = JSON.stringify(payload);
+            expect(wire).not.toContain("hunter2");
+            expect(wire).not.toContain("--env");
+            expect(wire).not.toContain(extra.secret);
+            expect(spawnSpy).not.toHaveBeenCalled();
+        }, 15000);
     });
 
     test('socket must be closed/disconnected at the end', async () => {
