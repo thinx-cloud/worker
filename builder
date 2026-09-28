@@ -369,30 +369,30 @@ if [[ -d "${BUILD_PATH}/${REPO_NAME}" ]];
 then
 	echo "Directory $REPO_NAME exists, entering..." | tee -a "${LOG_PATH}"
 	cd $BUILD_PATH/$REPO_NAME
-	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
-	ls -la | tee -a "${LOG_PATH}"
+	#echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
+	#ls -la | tee -a "${LOG_PATH}"
 	SINK=$BUILD_PATH/$REPO_NAME
 	cd $SINK
 	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
-	ls -la | tee -a "${LOG_PATH}"
-	ls -la * | tee -a "${LOG_PATH}"
+	#ls -la | tee -a "${LOG_PATH}"
+	#ls -la * | tee -a "${LOG_PATH}"
 else
 	echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
-	ls | tee -a "${LOG_PATH}"
+	#ls | tee -a "${LOG_PATH}"
 	echo "REPO_NAME ${REPO_NAME} does not exist, entering * instead..." | tee -a "${LOG_PATH}"
 	SINK=$BUILD_PATH/*
-	echo "Entering SINK ${SINK}" | tee -a "${LOG_PATH}"
 	if [[ -d "$SINK" ]]; 
 	then 
+		echo "Entering SINK ${SINK}" | tee -a "${LOG_PATH}"
 		cd $SINK 
 		echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
-		ls -la | tee -a "${LOG_PATH}"
-		ls -la * | tee -a "${LOG_PATH}"
+		#ls -la | tee -a "${LOG_PATH}"
+		#ls -la * | tee -a "${LOG_PATH}"
 	fi
 fi
 
-echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
-ls -la | tee -a "${LOG_PATH}"
+#echo "Current path: $(pwd)" | tee -a "${LOG_PATH}"
+#ls -la | tee -a "${LOG_PATH}"
 
 echo "Updating submodules..." | tee -a "${LOG_PATH}"
 git submodule update --init --recursive | tee -a "${LOG_PATH}"
