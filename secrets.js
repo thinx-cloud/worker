@@ -49,4 +49,11 @@ function _resetCacheForTests() {
 	for (const k in cache) delete cache[k];
 }
 
-module.exports = { readSecret, _resetCacheForTests };
+// The Rollbar server token (D-03): ROLLBAR_SERVER_TOKEN is the primary name,
+// ROLLBAR_ACCESS_TOKEN the fallback kept for one release so either deploy order
+// works. Each name is resolved file-first through readSecret.
+function rollbarServerToken() {
+	return readSecret("ROLLBAR_SERVER_TOKEN") || readSecret("ROLLBAR_ACCESS_TOKEN") || null;
+}
+
+module.exports = { readSecret, _resetCacheForTests, rollbarServerToken };

@@ -1,12 +1,3 @@
-if (typeof(process.env.ROLLBAR_TOKEN) !== "undefined") {
-    var Rollbar = require('rollbar');
-    new Rollbar({
-        accessToken: process.env.ROLLBAR_TOKEN,
-        handleUncaughtExceptions: true,
-        handleUnhandledRejections: true
-    });
-}
-
 const exec = require("child_process");
 const crypto = require("crypto");
 const version = require('./package.json').version;

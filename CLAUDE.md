@@ -36,13 +36,24 @@ Keep them strict.
 
 ## Secrets
 
-`WORKER_SECRET` and `ROLLBAR_ACCESS_TOKEN` are **injected at runtime** (e.g.
-`docker run -e ...`), not baked into the image. Do not re-add them as
-`ARG`/`ENV` in the `Dockerfile` — that would persist them in image layers.
+`WORKER_SECRET` and the Rollbar token are read through `secrets.js`
+(`readSecret`, a copy of the API's `lib/thinx/secrets.js` — keep the two in
+sync): a swarm secret file `/run/secrets/<NAME>` wins, then the env var, then
+nothing. A mounted `WORKER_SECRET` therefore overrides a stale env value, which
+is what makes a secret rotation take effect. Rollbar tries `ROLLBAR_SERVER_TOKEN`,
+then `ROLLBAR_ACCESS_TOKEN` (`rollbarServerToken()`), and is initialised once, in
+`worker.js`; `class.js` creates no Rollbar client. With no token the worker logs
+one info line naming `ROLLBAR_SERVER_TOKEN` and runs without Rollbar; with no
+`WORKER_SECRET` it refuses every job. `readSecret` caches per name for the life
+of the process, so a newly mounted secret needs a task restart.
+
+Both are still **injected at runtime** (swarm secret or `docker run -e ...`), not
+baked into the image. Do not re-add them as `ARG`/`ENV` in the `Dockerfile` —
+that would persist them in image layers. Never log their values.
 
 ## Testing
 
-`npm test` (Jest). The full suite passes (22/22 as of 2026-09-18). A green run is
+`npm test` (Jest). The full suite passes (60/60 as of 2026-09-29). A green run is
 the baseline — treat any failure as a regression from your own change.
 
 The two long-standing failures noted here previously (`runShell` /
