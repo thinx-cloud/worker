@@ -698,3 +698,144 @@ describe("Worker", () => {
 
 });
 
+
+// SEC-CFG-02 / D-03: the worker reads the Rollbar server token through
+// secrets.js (ROLLBAR_SERVER_TOKEN first, then ROLLBAR_ACCESS_TOKEN; a
+// /run/secrets file before env), and only worker.js creates a Rollbar client.
+describe("Rollbar server token (SEC-CFG-02, D-03)", () => {
+
+    const NAMES = ["ROLLBAR_SERVER_TOKEN", "ROLLBAR_ACCESS_TOKEN", "ROLLBAR_TOKEN", "THINX_SERVER"];
+    const SERVER_ENV = "spec-server-env-token";
+    const SERVER_FILE = "spec-server-file-token";
+    const ACCESS_ENV = "spec-access-env-token";
+
+    let savedEnv, files, realExistsSync, realReadFileSync;
+
+    const secretPath = (name) => "/run/secrets/" + name;
+    const ownedPath = (p) => NAMES.some((name) => p === secretPath(name));
+
+    beforeEach(() => {
+        savedEnv = {};
+        NAMES.forEach((name) => { savedEnv[name] = process.env[name]; delete process.env[name]; });
+        files = {};
+        realExistsSync = fs.existsSync;
+        realReadFileSync = fs.readFileSync;
+        fs.existsSync = function (p) {
+            if (ownedPath(p)) return Object.prototype.hasOwnProperty.call(files, p);
+            return realExistsSync.apply(this, arguments);
+        };
+        fs.readFileSync = function (p) {
+            if (ownedPath(p)) {
+                if (!Object.prototype.hasOwnProperty.call(files, p)) throw new Error("ENOENT: " + p);
+                return files[p] + "\n";
+            }
+            return realReadFileSync.apply(this, arguments);
+        };
+        secrets._resetCacheForTests();
+    });
+
+    afterEach(() => {
+        fs.existsSync = realExistsSync;
+        fs.readFileSync = realReadFileSync;
+        NAMES.forEach((name) => {
+            if (typeof savedEnv[name] === "undefined") delete process.env[name];
+            else process.env[name] = savedEnv[name];
+        });
+        secrets._resetCacheForTests();
+    });
+
+    const logLines = (logSpy) => logSpy.mock.calls.map((call) => util.format(...call));
+
+    // A Rollbar stand-in: records construction, and has the info() worker.js calls.
+    const rollbarMock = () => jest.fn(function () { this.info = jest.fn(); });
+
+    // Load worker.js once, isolated, with rollbar and class.js stubbed so no
+    // socket is opened.
+    const loadWorkerEntry = (RollbarMock) => {
+        process.env.THINX_SERVER = "http://localhost:4999";
+        const WorkerMock = jest.fn();
+        jest.isolateModules(() => {
+            jest.doMock("rollbar", () => RollbarMock);
+            jest.doMock("./class.js", () => WorkerMock);
+            require("./worker.js");
+        });
+        jest.dontMock("rollbar");
+        jest.dontMock("./class.js");
+        return WorkerMock;
+    };
+
+    test("rollbarServerToken() is null when neither name resolves", () => {
+        expect(typeof secrets.rollbarServerToken).toBe("function");
+        expect(secrets.rollbarServerToken()).toBeNull();
+    });
+
+    test("rollbarServerToken() falls back to ROLLBAR_ACCESS_TOKEN", () => {
+        process.env.ROLLBAR_ACCESS_TOKEN = ACCESS_ENV;
+        expect(typeof secrets.rollbarServerToken).toBe("function");
+        expect(secrets.rollbarServerToken()).toBe(ACCESS_ENV);
+    });
+
+    test("rollbarServerToken() prefers ROLLBAR_SERVER_TOKEN when both names resolve", () => {
+        process.env.ROLLBAR_ACCESS_TOKEN = ACCESS_ENV;
+        process.env.ROLLBAR_SERVER_TOKEN = SERVER_ENV;
+        expect(typeof secrets.rollbarServerToken).toBe("function");
+        expect(secrets.rollbarServerToken()).toBe(SERVER_ENV);
+    });
+
+    test("rollbarServerToken() prefers the secret file over env for the same name", () => {
+        process.env.ROLLBAR_ACCESS_TOKEN = ACCESS_ENV;
+        process.env.ROLLBAR_SERVER_TOKEN = SERVER_ENV;
+        files[secretPath("ROLLBAR_SERVER_TOKEN")] = SERVER_FILE;
+        expect(typeof secrets.rollbarServerToken).toBe("function");
+        expect(secrets.rollbarServerToken()).toBe(SERVER_FILE);
+    });
+
+    test("requiring class.js constructs no Rollbar client, whatever token env is set", () => {
+        process.env.ROLLBAR_TOKEN = "spec-dead-name-token";
+        process.env.ROLLBAR_ACCESS_TOKEN = ACCESS_ENV;
+        process.env.ROLLBAR_SERVER_TOKEN = SERVER_ENV;
+        const RollbarMock = rollbarMock();
+        jest.isolateModules(() => {
+            jest.doMock("rollbar", () => RollbarMock);
+            require("./class.js");
+        });
+        jest.dontMock("rollbar");
+        expect(RollbarMock).not.toHaveBeenCalled();
+    });
+
+    test("worker.js creates no Rollbar client and logs one info line when no token resolves", () => {
+        const RollbarMock = rollbarMock();
+        const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+        try {
+            const WorkerMock = loadWorkerEntry(RollbarMock);
+            expect(WorkerMock).toHaveBeenCalledTimes(1);
+            expect(RollbarMock).not.toHaveBeenCalled();
+            const info = logLines(logSpy).filter((line) => line.includes("ROLLBAR_SERVER_TOKEN not set"));
+            expect(info.length).toBe(1);
+            expect(info[0]).toContain("[info]");
+        } finally {
+            logSpy.mockRestore();
+        }
+    });
+
+    test("worker.js creates exactly one Rollbar client from the server token and never logs it", () => {
+        process.env.ROLLBAR_ACCESS_TOKEN = ACCESS_ENV;
+        files[secretPath("ROLLBAR_SERVER_TOKEN")] = SERVER_FILE;
+        const RollbarMock = rollbarMock();
+        const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+        try {
+            loadWorkerEntry(RollbarMock);
+            expect(RollbarMock).toHaveBeenCalledTimes(1);
+            expect(RollbarMock).toHaveBeenCalledWith(expect.objectContaining({
+                accessToken: SERVER_FILE,
+                handleUncaughtExceptions: true,
+                handleUnhandledRejections: true
+            }));
+            const lines = logLines(logSpy);
+            expect(lines.some((line) => line.includes(SERVER_FILE) || line.includes(ACCESS_ENV))).toBe(false);
+            expect(lines.some((line) => line.includes("ROLLBAR_SERVER_TOKEN not set"))).toBe(false);
+        } finally {
+            logSpy.mockRestore();
+        }
+    });
+});
