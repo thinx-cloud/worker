@@ -539,6 +539,61 @@ describe("Worker", () => {
             expect(wire).not.toContain(extra.secret);
             expect(spawnSpy).not.toHaveBeenCalled();
         }, 15000);
+
+        // Review iteration 3, WR-01: a job that reached a busy worker was
+        // dropped with a log line only. The API never learned that it would
+        // not run, so the build never reached a terminal state and its
+        // decrypted credentials stayed on disk.
+
+        test('refuseBusyJob reports worker_busy with identifying fields only and keeps the running build', () => {
+            w.running = true;
+            w.refuseBusyJob(fakeSock, argvJob(validArgv().concat([ENV_ARG]), {
+                secret: "leak-me-please",
+                cmd: "./builder '" + ENV_ARG + "'"
+            }));
+            expect(fakeSock.emit).toHaveBeenCalledTimes(1);
+            const [event, payload] = fakeSock.emit.mock.calls[0];
+            expect(event).toBe("job-status");
+            expect(payload).toEqual({
+                build_id: ARGV_BUILD_ID,
+                udid: ARGV_UDID,
+                owner: ARGV_OWNER,
+                status: "Failed",
+                details: "worker_busy"
+            });
+            expect(w.running).toBe(true); // failJob would have released it
+        });
+
+        test('a job sent to a busy worker is refused with worker_busy, never run and never dropped silently', async () => {
+            await waitFor(() => w.socket.connected && typeof that.serverSocket === "object", 8000);
+            w.running = true; // a build is in progress on this worker
+            const received = statusFromServer(3000);
+            io.emit("job", argvJob(validArgv().concat([ENV_ARG]), { mock: true, cmd: "./builder '" + ENV_ARG + "'" }));
+            const payload = await received;
+            expect(payload).toEqual({
+                build_id: ARGV_BUILD_ID,
+                udid: ARGV_UDID,
+                owner: ARGV_OWNER,
+                status: "Failed",
+                details: "worker_busy"
+            });
+            const wire = JSON.stringify(payload);
+            expect(wire).not.toContain("hunter2");
+            expect(wire).not.toContain(SPEC_SECRET);
+            expect(spawnSpy).not.toHaveBeenCalled();
+            expect(w.running).toBe(true); // the running build is not released
+        }, 15000);
+
+        test('an empty job payload reaching a busy worker is ignored, not reported', () => {
+            w.running = true;
+            const handlers = {};
+            const sock = { on: (name, fn) => { handlers[name] = fn; }, emit: jest.fn() };
+            w.setupSocket(sock);
+            handlers.job(null);
+            handlers.job(undefined);
+            expect(sock.emit).not.toHaveBeenCalled();
+            expect(w.running).toBe(true);
+        });
     });
 
     test('socket must be closed/disconnected at the end', async () => {

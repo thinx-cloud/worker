@@ -62,6 +62,13 @@ module.exports = class Worker {
     // JSON, and the API logs every job-status it receives (T-23-13). Never
     // echo the job object.
     failJob(sock, job, details) {
+        this.reportRefusal(sock, job, details);
+        this.running = false;
+    }
+
+    // The job-status for a job this worker will not run: the identifying
+    // fields only, never the job itself (see failJob).
+    reportRefusal(sock, job, details) {
         const source = ((job !== null) && (typeof(job) === "object")) ? job : {};
         sock.emit('job-status', {
             build_id: source.build_id,
@@ -70,7 +77,19 @@ module.exports = class Worker {
             status: "Failed",
             details: details
         });
-        this.running = false;
+    }
+
+    // Review iteration 3, WR-01: a job that arrives while a build is running
+    // used to be dropped with a log line only, so the API never learned that
+    // it would not run: the build log never reached a terminal state and the
+    // decrypted credentials stayed in its checkout. The worker now refuses it
+    // explicitly with details "worker_busy". It must not go through failJob:
+    // failJob clears this.running, which would release the build that is
+    // still running here and let a third job start next to it.
+    refuseBusyJob(sock, job) {
+        const build_id = ((job !== null) && (typeof(job) === "object")) ? job.build_id : undefined;
+        console.log(`${new Date().getTime()} This worker is already running; refusing job ${build_id} (worker_busy).`);
+        this.reportRefusal(sock, job, "worker_busy");
     }
 
     validateJob(sock, job) {
@@ -464,13 +483,15 @@ module.exports = class Worker {
         });
 
         socket.on('job', (data) => { 
-            if (this.running == true) {
-                console.log(`${new Date().getTime()} This worker is already running... passing job ${data}`);
-                return;
-            }
             // Ignore empty payloads before dereferencing them (data.path below).
+            // Checked before the busy refusal, which would otherwise report a
+            // job-status with no build_id for the API to attribute.
             if (data === null || typeof(data) === "undefined") {
                 console.log(`${new Date().getTime()} [warning] Ignoring empty job payload.`);
+                return;
+            }
+            if (this.running == true) {
+                this.refuseBusyJob(socket, data);
                 return;
             }
             // Prevent path traversal by rejecting insane values
