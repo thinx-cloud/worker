@@ -25,6 +25,22 @@ const BUILDER_PROGRAM = "/opt/thinx/thinx-device-api/builder";
 // a worker release first, or its jobs fail with "Invalid argv".
 const ALLOWED_ARGV_FLAGS = ["owner", "udid", "fcid", "mac", "git", "branch", "id", "workdir", "env"];
 
+// --env carries the owner's custom environment variables as JSON, which may
+// hold credentials (T-23-13). Every log line that shows a job's argv or its
+// legacy cmd goes through these two helpers.
+const redactArgv = (argv) => Array.isArray(argv)
+    ? argv.map((arg) => ((typeof(arg) === "string") && (arg.indexOf("--env=") === 0)) ? "--env=<redacted>" : arg)
+    : argv;
+
+// The legacy cmd holds the same --env JSON, shell-quoted and possibly split
+// on spaces, and the API always appends it last; everything from the first
+// --env= onward is dropped. Over-redacting a log line is harmless.
+const redactCommand = (cmd) => {
+    if (typeof(cmd) !== "string") return cmd;
+    const at = cmd.indexOf("--env=");
+    return (at === -1) ? cmd : cmd.slice(0, at) + "--env=<redacted>";
+};
+
 module.exports = class Worker {
 
     constructor(build_server) {
@@ -206,8 +222,7 @@ module.exports = class Worker {
         console.log(`"[OID:${owner}] [BUILD_STARTED] Worker started...`);
         // --env carries the owner's custom environment variables as JSON, which
         // may hold credentials, so its value stays out of the log.
-        let loggable = argv.map((arg) => (arg.indexOf("--env=") === 0) ? "--env=<redacted>" : arg);
-        console.log(`[info] worker runArgv ${loggable.join(" ")}`);
+        console.log(`[info] worker runArgv ${redactArgv(argv).join(" ")}`);
 
         let shell = exec.spawn(BUILDER_PROGRAM, argv, { shell: false });
         this.attachBuildHandlers(shell, owner, build_id, udid, path, socket, callback);
@@ -248,8 +263,8 @@ module.exports = class Worker {
             }
         }
 
-        console.log(`[info] worker runShell command: ${tomes}`);
         let command = tomes.join(" ");
+        console.log(`[info] worker runShell command: ${redactCommand(command)}`);
         
         // deepcode ignore CommandInjection: this is expected functionality, risk should be accepted.
         let shell = exec.spawn(command, { shell: true });
@@ -454,10 +469,14 @@ module.exports = class Worker {
                 console.log(`${new Date().getTime()} [error] Invalid path (no path traversal allowed).`);
                 return;
             }
-            // The job secret authenticates the API (WORKER_SECRET); never log it.
+            // The job secret authenticates the API (WORKER_SECRET), and argv/cmd
+            // carry the owner's --env payload; none of them reach the log.
             let loggable = data;
-            if (typeof(data) === "object" && typeof(data.secret) !== "undefined") {
-                loggable = Object.assign({}, data, { secret: "<redacted>" });
+            if (typeof(data) === "object") {
+                loggable = Object.assign({}, data);
+                if (typeof(data.argv) !== "undefined") loggable.argv = redactArgv(data.argv);
+                if (typeof(data.cmd) !== "undefined") loggable.cmd = redactCommand(data.cmd);
+                if (typeof(data.secret) !== "undefined") loggable.secret = "<redacted>";
             }
             console.log(new Date().getTime(), `» Worker has new job:`, loggable);
             // runJob sets this.running = true and starts the build asynchronously

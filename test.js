@@ -422,6 +422,43 @@ describe("Worker", () => {
             }
         });
 
+        test('legacy cmd-only job logs its command without the --env payload', () => {
+            const cmd = "./builder --owner=" + ARGV_OWNER + " --id=" + ARGV_BUILD_ID + " '--env={\"WIFI_PASS\":\"hunter2\"}'";
+            const logSpy = jest.spyOn(console, "log");
+            try {
+                w.runJob(fakeSock, { cmd: cmd, build_id: ARGV_BUILD_ID, udid: "u", secret: SPEC_SECRET });
+                expect(spawnSpy).toHaveBeenCalledTimes(1);
+                const lines = logLinesOf(logSpy);
+                expect(lines.some((line) => line.includes("hunter2"))).toBe(false);
+                expect(lines.some((line) => line.includes("worker runShell command") && line.includes("--env=<redacted>"))).toBe(true);
+            } finally {
+                logSpy.mockRestore();
+            }
+        });
+
+        test('the socket job handler never logs the --env payload from argv or cmd', async () => {
+            await waitFor(() => w.socket.connected && typeof that.serverSocket === "object", 8000);
+            const logSpy = jest.spyOn(console, "log");
+            try {
+                const env = "--env={\"WIFI_PASS\":\"hunter2\"}";
+                io.emit("job", {
+                    mock: true,
+                    build_id: ARGV_BUILD_ID,
+                    udid: ARGV_UDID,
+                    argv: validArgv().concat([env]),
+                    cmd: "./builder --id=" + ARGV_BUILD_ID + " '" + env + "'",
+                    secret: "wrong-secret"
+                });
+                await waitFor(() => logLinesOf(logSpy).some((line) => line.includes("Worker has new job")), 3000);
+                const lines = logLinesOf(logSpy);
+                expect(lines.some((line) => line.includes("hunter2"))).toBe(false);
+                expect(lines.some((line) => line.includes("Worker has new job") && line.includes("--env=<redacted>"))).toBe(true);
+                expect(spawnSpy).not.toHaveBeenCalled(); // wrong secret: refused
+            } finally {
+                logSpy.mockRestore();
+            }
+        }, 15000);
+
         test('the socket job handler never logs the job secret', async () => {
             // The worker connects asynchronously; the earlier io.emit cases are
             // fire-and-forget, so wait for a live connection before emitting.
