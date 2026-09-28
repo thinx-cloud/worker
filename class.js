@@ -13,6 +13,7 @@ const version = require('./package.json').version;
 const io = require('socket.io-client');
 const fs = require("fs-extra");
 const chmodr = require('chmodr');
+const { readSecret } = require("./secrets.js");
 
 // The worker owns the program path (SEC-EXEC-02, D-04). An argv job carries
 // arguments only, so the API can never name what runs on this root +
@@ -124,8 +125,9 @@ module.exports = class Worker {
         }
 
         // Fail closed: a worker without a configured secret must never run remote jobs.
-        const workerSecret = process.env.WORKER_SECRET;
-        if (typeof(workerSecret) === "undefined" || workerSecret === null || workerSecret === "") {
+        // A mounted /run/secrets/WORKER_SECRET wins over the env value (SEC-CFG-02, D-07).
+        const workerSecret = readSecret("WORKER_SECRET");
+        if (!workerSecret) {
             console.log(`${new Date().getTime()} [critical] WORKER_SECRET is not configured; refusing job. Set WORKER_SECRET to enable authenticated builds.`);
             return false;
         }
@@ -460,9 +462,10 @@ module.exports = class Worker {
 
         // either by directly modifying the `auth` attribute
         socket.on("connect_error", () => {
-            if ((typeof(process.env.WORKER_SECRET) !== "undefined")) {
+            const workerSecret = readSecret("WORKER_SECRET");
+            if (workerSecret) {
                 if (typeof(socket.auth) !== "undefined") {
-                    socket.auth.token = process.env.WORKER_SECRET;
+                    socket.auth.token = workerSecret;
                     console.log(`${new Date().getTime()} connect_error attempt to resolve using WORKER_SECRET`);
                 }
                 setTimeout(function(){

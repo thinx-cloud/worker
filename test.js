@@ -5,8 +5,10 @@ const { Server } = require("socket.io");
 const EventEmitter = require("events");
 const child_process = require("child_process");
 const util = require("util");
+const fs = require("fs");
 
 const Worker = require('./class.js');
+const secrets = require('./secrets.js');
 
 let server_port = 4000;
 
@@ -282,6 +284,7 @@ describe("Worker", () => {
         beforeEach(() => {
             savedSecret = process.env.WORKER_SECRET;
             process.env.WORKER_SECRET = SPEC_SECRET;
+            secrets._resetCacheForTests();
             spawnSpy = jest.spyOn(child_process, "spawn").mockImplementation(() => fakeChild());
             fakeSock = { emit: jest.fn() };
             w.running = false;
@@ -294,6 +297,7 @@ describe("Worker", () => {
             } else {
                 process.env.WORKER_SECRET = savedSecret;
             }
+            secrets._resetCacheForTests();
             w.running = false;
         });
 
@@ -346,6 +350,7 @@ describe("Worker", () => {
 
         test('argv job is refused when WORKER_SECRET is not configured (fail closed)', () => {
             delete process.env.WORKER_SECRET;
+            secrets._resetCacheForTests();
             w.runJob(fakeSock, argvJob(validArgv()));
             expect(spawnSpy).not.toHaveBeenCalled();
         });
@@ -583,6 +588,85 @@ describe("Worker", () => {
             expect(spawnSpy).not.toHaveBeenCalled();
             expect(w.running).toBe(true); // the running build is not released
         }, 15000);
+
+        // SEC-CFG-02 / D-07: WORKER_SECRET resolves through secrets.js, and a
+        // mounted /run/secrets/WORKER_SECRET wins over the env value. The
+        // rotation only counts if the stale env value stops authenticating.
+        describe('WORKER_SECRET from swarm secrets (SEC-CFG-02, D-07)', () => {
+
+            const SECRET_FILE = "/run/secrets/WORKER_SECRET";
+            const FILE_SECRET = "spec-file-secret";
+            const ENV_SECRET = "spec-env-secret";
+
+            let realExistsSync, realReadFileSync, fileValue;
+
+            beforeEach(() => {
+                fileValue = undefined;
+                realExistsSync = fs.existsSync;
+                realReadFileSync = fs.readFileSync;
+                // Answer only the secret path; delegate everything else.
+                fs.existsSync = function (p) {
+                    if (p === SECRET_FILE) return typeof fileValue === "string";
+                    return realExistsSync.apply(this, arguments);
+                };
+                fs.readFileSync = function (p) {
+                    if (p === SECRET_FILE) {
+                        if (typeof fileValue !== "string") throw new Error("ENOENT: " + SECRET_FILE);
+                        return fileValue + "\n";
+                    }
+                    return realReadFileSync.apply(this, arguments);
+                };
+                process.env.WORKER_SECRET = ENV_SECRET;
+                secrets._resetCacheForTests();
+            });
+
+            afterEach(() => {
+                fs.existsSync = realExistsSync;
+                fs.readFileSync = realReadFileSync;
+                secrets._resetCacheForTests();
+            });
+
+            test('a job carrying the secret-file value is accepted when env holds a different value', () => {
+                fileValue = FILE_SECRET;
+                w.runJob(fakeSock, argvJob(validArgv(), { secret: FILE_SECRET }));
+                expect(fakeSock.emit).not.toHaveBeenCalledWith("job-status",
+                    expect.objectContaining({ details: "Invalid job authentication" }));
+                expect(spawnSpy).toHaveBeenCalledTimes(1);
+            });
+
+            test('a job carrying the stale env value is refused once the secret file exists', () => {
+                fileValue = FILE_SECRET;
+                w.runJob(fakeSock, argvJob(validArgv(), { secret: ENV_SECRET }));
+                expect(spawnSpy).not.toHaveBeenCalled();
+                expect(fakeSock.emit).toHaveBeenCalledWith("job-status",
+                    expect.objectContaining({ details: "Invalid job authentication" }));
+            });
+
+            test('with neither a secret file nor env, the job is refused before spawn (fail closed)', () => {
+                delete process.env.WORKER_SECRET;
+                secrets._resetCacheForTests();
+                const logSpy = jest.spyOn(console, "log");
+                try {
+                    w.runJob(fakeSock, argvJob(validArgv()));
+                    expect(spawnSpy).not.toHaveBeenCalled();
+                    expect(logLinesOf(logSpy).some((line) => line.includes("WORKER_SECRET is not configured"))).toBe(true);
+                } finally {
+                    logSpy.mockRestore();
+                }
+            });
+
+            test('readSecret never reads a file outside /run/secrets', () => {
+                const existsSpy = jest.spyOn(fs, "existsSync").mockReturnValue(true);
+                const readSpy = jest.spyOn(fs, "readFileSync");
+                try {
+                    expect(secrets.readSecret("../etc/passwd", "d")).toBe("d");
+                    expect(readSpy.mock.calls.some((call) => String(call[0]).includes("passwd"))).toBe(false);
+                } finally {
+                    existsSpy.mockRestore();
+                    readSpy.mockRestore();
+                }
+            });
+        });
 
         test('an empty job payload reaching a busy worker is ignored, not reported', () => {
             w.running = true;
