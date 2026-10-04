@@ -56,6 +56,10 @@ function isAlive(pid) {
 //   logs_final        what `service logs` prints after its first call
 //   logs_hang         first `service logs` call (the background one) blocks
 //   calls.log         every invocation
+//   fw_size           the build (service create / run) writes a firmware image
+//                     of this many bytes to <workspace>/build/firmware.bin
+//   fw_symlink        ... or a symlink to this path instead
+//   run_rc            exit status of `docker run` (default 0)
 const DOCKER_STUB = `#!/bin/sh
 S="$STUB_DIR"
 echo "$*" >> "$S/calls.log"
@@ -69,12 +73,22 @@ next_line() {
 }
 case "$1 $2" in
   "service create")
-    name=""; prev=""
+    name=""; prev=""; ws=""
     for a in "$@"; do
       if [ "$prev" = "--name" ]; then name="$a"; fi
+      case "$a" in type=bind,source=*,destination=/opt/workspace)
+        ws=\${a#type=bind,source=}; ws=\${ws%,destination=/opt/workspace} ;;
+      esac
       prev="$a"
     done
     echo "$name" > "$S/name"
+    # the build itself: the image writes its output into the workspace
+    if [ -f "$S/fw_size" ] && [ -n "$ws" ]; then
+      head -c "$(cat "$S/fw_size")" /dev/zero > "$ws/build/firmware.bin"
+    fi
+    if [ -f "$S/fw_symlink" ] && [ -n "$ws" ]; then
+      ln -s "$(cat "$S/fw_symlink")" "$ws/build/firmware.bin"
+    fi
     echo "stubserviceid"
     exit 0 ;;
   "service ls")
@@ -107,6 +121,28 @@ case "$1 $2" in
     touch "$S/removed"
     echo "$3"
     exit 0 ;;
+esac
+case "$1" in
+  pull)
+    exit 0 ;;
+  run)
+    ws=""; prev=""
+    for a in "$@"; do
+      if [ "$prev" = "-v" ]; then
+        case "$a" in *:/opt/workspace) ws=\${a%:/opt/workspace} ;; esac
+      fi
+      prev="$a"
+    done
+    echo "stub build output"
+    if [ -f "$S/fw_size" ] && [ -n "$ws" ]; then
+      head -c "$(cat "$S/fw_size")" /dev/zero > "$ws/build/firmware.bin"
+    fi
+    if [ -f "$S/fw_symlink" ] && [ -n "$ws" ]; then
+      ln -s "$(cat "$S/fw_symlink")" "$ws/build/firmware.bin"
+    fi
+    rc=$(cat "$S/run_rc" 2>/dev/null || echo 0)
+    if [ "$rc" = 0 ]; then echo "THiNX BUILD SUCCESSFUL."; else echo "THiNX BUILD FAILED: $rc"; fi
+    exit "$rc" ;;
 esac
 echo "unexpected docker call: $*" >&2
 exit 1
@@ -440,6 +476,215 @@ describe.each(SHELLS)("platformio environment selection under %s", (...shell) =>
     });
 });
 
+// --- micropython (suculent/micropython-docker-build) -------------------------
+//
+// Contract (builder-lib.sh upy_build, the image's cmd.sh and README): the
+// repository is mounted at /opt/workspace, the image runs its own command,
+// freezes the repository's *.py and writes /opt/workspace/build/firmware.bin;
+// the worker deploys that file to DEPLOYMENT_PATH/firmware.bin when the build
+// succeeded and the image is over 10000 bytes.
+
+const UPY_IMAGE = "suculent/micropython-docker-build";
+
+function upyRepo() {
+    const dir = tmpDir("on2-upy-");
+    const wd = path.join(dir, "repo");
+    const dep = path.join(dir, "deploy");
+    fs.mkdirSync(wd);
+    fs.mkdirSync(dep);
+    fs.writeFileSync(path.join(wd, "thinx.yml"), "micropython:\n  platform: esp8266\n  build:\n    type: firmware\n");
+    fs.writeFileSync(path.join(wd, "main.py"), "import thinx\nthinx.main()\n");
+    fs.writeFileSync(path.join(wd, "thinx.py"), "# thinx\n");
+    return { dir, wd, dep };
+}
+
+// Runs `fn` (upy_build or upy_files) from builder-lib.sh against the stub
+// docker. scenario: swarm, fwSize, fwSymlink(repo) -> link target, runRc, ls,
+// ps, logs, before(repo).
+function runUpy(shell, scenario, fn) {
+    const repo = upyRepo();
+    const stubDir = path.join(repo.dir, "stub");
+    const binDir = path.join(repo.dir, "bin");
+    fs.mkdirSync(stubDir);
+    fs.mkdirSync(binDir);
+    fs.writeFileSync(path.join(binDir, "docker"), DOCKER_STUB, { mode: 0o755 });
+    fs.writeFileSync(path.join(stubDir, "ls_seq"), ["0/1"].concat(scenario.ls || ["1/1", "0/1"]).join("\n") + "\n");
+    fs.writeFileSync(path.join(stubDir, "ps_seq"), (scenario.ps || ["Complete 1 second ago|"]).join("\n") + "\n");
+    fs.writeFileSync(path.join(stubDir, "logs_final"), scenario.logs || "THiNX BUILD SUCCESSFUL.\n");
+    if (scenario.fwSize !== undefined) fs.writeFileSync(path.join(stubDir, "fw_size"), String(scenario.fwSize));
+    if (scenario.fwSymlink) fs.writeFileSync(path.join(stubDir, "fw_symlink"), scenario.fwSymlink(repo));
+    if (scenario.runRc !== undefined) fs.writeFileSync(path.join(stubDir, "run_rc"), String(scenario.runRc));
+    if (scenario.before) scenario.before(repo);
+
+    const logPath = path.join(repo.dir, "build.log");
+    const outPath = path.join(repo.dir, "out.txt");
+    const rcPath = path.join(repo.dir, "rc.txt");
+    const ofPath = path.join(repo.dir, "outfile.txt");
+    fs.writeFileSync(logPath, "");
+    const call = fn === "upy_files" ? 'upy_files "$WD" "$DEP"' : 'upy_build "$SWARM" "$WD" "$DEP" "$LOG"';
+    const script = '. "$LIB"; ' + call + ' > "$OUT" 2>&1; echo "$?" > "$RCF"; printf "%s" "$UPY_OUTFILE" > "$OF"';
+    const env = Object.assign({}, process.env, {
+        PATH: binDir + ":" + process.env.PATH,
+        STUB_DIR: stubDir, LIB, WD: repo.wd, DEP: repo.dep, LOG: logPath,
+        OUT: outPath, RCF: rcPath, OF: ofPath, LC_ALL: "C",
+        SWARM: scenario.swarm === false ? "false" : "true",
+        SWARMBUILD_FIRST_POLL: "0", SWARMBUILD_POLL_INTERVAL: "0", SWARMBUILD_MAX_ITERATIONS: "8"
+    });
+    const res = child_process.spawnSync(shell[0], shell.slice(1).concat(["-c", script]), { env, timeout: 20000 });
+    const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : "");
+    const calls = read(path.join(stubDir, "calls.log"));
+    return Object.assign(repo, {
+        spawnError: res.error,
+        rc: parseInt(read(rcPath), 10),
+        out: read(outPath),
+        log: read(logPath),
+        outfile: read(ofPath),
+        calls,
+        creates: calls.split("\n").filter((l) => l.startsWith("service create")),
+        runs: calls.split("\n").filter((l) => l.startsWith("run "))
+    });
+}
+
+const deployed = (r) => path.join(r.dep, "firmware.bin");
+
+describe.each(SHELLS)("micropython build under %s", (...shell) => {
+
+    test("the build service mounts the repository at /opt/workspace and runs the image's own command", () => {
+        const r = runUpy(shell, { fwSize: 20000 });
+        expect(r.spawnError).toBeUndefined();
+        expect(r.creates).toHaveLength(1);
+        const argv = r.creates[0].split(" ").filter((a) => a.length > 0);
+        expect(argv).toContain("type=bind,source=" + r.wd + ",destination=/opt/workspace");
+        expect(argv[argv.length - 1]).toBe(UPY_IMAGE);
+        expect(r.creates[0]).not.toContain("/micropython/esp8266");
+        expect(r.creates[0]).not.toContain("--workdir");
+    });
+
+    test("a swarm build deploys build/firmware.bin to DEPLOYMENT_PATH/firmware.bin", () => {
+        const r = runUpy(shell, { fwSize: 20000 });
+        expect(r.rc).toBe(0);
+        expect(r.outfile).toBe(deployed(r));
+        expect(fs.statSync(deployed(r)).size).toBe(20000);
+    });
+
+    test("build/ is created fresh and writable for the image's unprivileged user", () => {
+        const r = runUpy(shell, { fwSize: 20000 });
+        expect(r.rc).toBe(0);
+        expect(fs.lstatSync(path.join(r.wd, "build")).isDirectory()).toBe(true);
+        expect(fs.statSync(path.join(r.wd, "build")).mode & 0o777).toBe(0o777);
+    });
+
+    test("an image of 10000 bytes or less is not deployed", () => {
+        const r = runUpy(shell, { fwSize: 10000 });
+        expect(r.rc).not.toBe(0);
+        expect(r.outfile).toBe("");
+        expect(fs.existsSync(deployed(r))).toBe(false);
+        expect(r.log).toContain("below 10k");
+    });
+
+    test("a failed build task deploys nothing, even with an image on disk", () => {
+        const r = runUpy(shell, {
+            fwSize: 20000,
+            ps: ["Failed 1 second ago|task: non-zero exit (1)"],
+            logs: "THiNX BUILD FAILED: 1\n"
+        });
+        expect(r.rc).not.toBe(0);
+        expect(r.outfile).toBe("");
+        expect(fs.existsSync(deployed(r))).toBe(false);
+    });
+
+    test("a firmware.bin committed to the repository is never deployed", () => {
+        const r = runUpy(shell, {
+            before: (repo) => {
+                fs.mkdirSync(path.join(repo.wd, "build"));
+                fs.writeFileSync(path.join(repo.wd, "build", "firmware.bin"), "C".repeat(50000));
+            }
+        });
+        expect(r.rc).not.toBe(0);
+        expect(fs.existsSync(deployed(r))).toBe(false);
+    });
+
+    test("a build/ symlink in the repository is replaced, its target left alone", () => {
+        let outside;
+        const r = runUpy(shell, {
+            fwSize: 20000,
+            before: (repo) => {
+                outside = path.join(repo.dir, "outside");
+                fs.mkdirSync(outside, { mode: 0o700 });
+                fs.writeFileSync(path.join(outside, "keep.txt"), "keep");
+                fs.symlinkSync(outside, path.join(repo.wd, "build"));
+            }
+        });
+        expect(r.rc).toBe(0);
+        expect(fs.lstatSync(path.join(r.wd, "build")).isSymbolicLink()).toBe(false);
+        expect(fs.statSync(outside).mode & 0o777).toBe(0o700);
+        expect(fs.readFileSync(path.join(outside, "keep.txt"), "utf8")).toBe("keep");
+        expect(fs.existsSync(path.join(outside, "firmware.bin"))).toBe(false);
+    });
+
+    test("a firmware.bin symlink is not followed into the deployment", () => {
+        // e.g. a link to a worker-side file, which the deployment would serve
+        const r = runUpy(shell, {
+            fwSymlink: (repo) => {
+                const target = path.join(repo.dir, "secret");
+                fs.writeFileSync(target, "S".repeat(20000));
+                return target;
+            }
+        });
+        expect(r.rc).not.toBe(0);
+        expect(fs.existsSync(deployed(r))).toBe(false);
+    });
+
+    test("without swarm, docker run mounts the repository at /opt/workspace", () => {
+        const r = runUpy(shell, { swarm: false, fwSize: 20000 });
+        expect(r.runs).toEqual(["run --cpus=1.0 --rm -t -v " + r.wd + ":/opt/workspace " + UPY_IMAGE]);
+        expect(r.rc).toBe(0);
+        expect(r.outfile).toBe(deployed(r));
+        expect(fs.statSync(deployed(r)).size).toBe(20000);
+        expect(r.log).toContain("THiNX BUILD SUCCESSFUL.");
+    });
+
+    test("without swarm, a failing build container deploys nothing", () => {
+        const r = runUpy(shell, { swarm: false, fwSize: 20000, runRc: 2 });
+        expect(r.rc).not.toBe(0);
+        expect(r.outfile).toBe("");
+        expect(fs.existsSync(deployed(r))).toBe(false);
+        expect(r.log).toContain("THiNX BUILD FAILED");
+    });
+
+    test("file mode copies the repository's *.py and names boot.py or main.py", () => {
+        const r = runUpy(shell, {
+            before: (repo) => {
+                fs.mkdirSync(path.join(repo.wd, "modules"));
+                fs.writeFileSync(path.join(repo.wd, "modules", "sensor.py"), "# sensor\n");
+                fs.symlinkSync("/etc/hosts", path.join(repo.wd, "hosts.py"));
+            }
+        }, "upy_files");
+        expect(r.rc).toBe(0);
+        expect(r.outfile).toBe(path.join(r.dep, "main.py"));
+        expect(fs.readdirSync(r.dep).sort()).toEqual(["main.py", "sensor.py", "thinx.py"]);
+        expect(r.calls).toBe("");
+    });
+
+    test("file mode prefers boot.py", () => {
+        const r = runUpy(shell, {
+            before: (repo) => fs.writeFileSync(path.join(repo.wd, "boot.py"), "# boot\n")
+        }, "upy_files");
+        expect(r.rc).toBe(0);
+        expect(r.outfile).toBe(path.join(r.dep, "boot.py"));
+    });
+
+    test("file mode without boot.py or main.py fails", () => {
+        const r = runUpy(shell, {
+            before: (repo) => {
+                fs.unlinkSync(path.join(repo.wd, "main.py"));
+            }
+        }, "upy_files");
+        expect(r.rc).not.toBe(0);
+        expect(r.outfile).toBe("");
+    });
+});
+
 // --- wiring into ./builder ---------------------------------------------------
 
 describe("builder wiring", () => {
@@ -479,6 +724,19 @@ describe("builder wiring", () => {
         const mounts = code(builder).concat(code(lib))
             .filter((l) => /docker\.sock/.test(l) && !/^\s*echo\b/.test(l));
         expect(mounts).toEqual([]);
+    });
+
+    test("the micropython branch builds through upy_build / upy_files", () => {
+        const start = builder.indexOf("\n    micropython)\n");
+        expect(start).toBeGreaterThan(-1);
+        const branch = builder.slice(start, builder.indexOf("\n\t\tnodemcu)\n", start));
+        expect(branch).toMatch(/upy_build "\$SWARM" "\$WORKDIR" "\$DEPLOYMENT_PATH" "\$LOG_PATH"/);
+        expect(branch).toMatch(/upy_files "\$WORKDIR" "\$DEPLOYMENT_PATH"/);
+        // the old contract: modules/ only, a --workdir the image does not have
+        expect(branch).not.toContain("/micropython/esp8266");
+        expect(branch).not.toContain("/modules:");
+        // the old firmware loop deleted the repository's own *.py
+        expect(branch).not.toMatch(/rm -rf \$FSPATH/);
     });
 
     test.each(SHELLS)("builder and builder-lib.sh parse under %s", (...shell) => {
@@ -622,6 +880,9 @@ const LEGIT_YML = {
         "devsec:\n  ssid: \"Fake Net 5G\"\n  pass: \"fake pass: 1\"\n  ckey: \"Zm9v+YmFy/0==\"\n",
     "nodemcu section": "nodemcu:\n  build_type: file\n  build_float: false\n",
     "micropython section": "micropython:\n  build_type: file\n  platform: esp32\n",
+    // suculent/thinx-firmware-esp8266-upy (modules list shortened)
+    "thinx-firmware-esp8266-upy": "micropython:\n  platform: esp8266\n  build:\n    type: firmware\n" +
+        "  modules:\n    - _boot.py\n    - apa102.py\n    - webrepl.py\n",
     // what lib/thinx/builder.js writes back with YAML.stringify
     "API write-back (YAML.stringify)": "arduino:\n  platform: esp8266\ndevsec:\n  ckey: Q2tleQ==\n  ssid: \"#home net\"\n" +
         "  pass: \"a: b\\\"\\\\c\"\n"
@@ -634,6 +895,7 @@ const LEGIT_EXPECTED = {
     "arduino-docker-build dummy (quoted)": { devsec_ssid: "Fake Net 5G", devsec_pass: "fake pass: 1", devsec_ckey: "Zm9v+YmFy/0==" },
     "nodemcu section": { nodemcu_build_type: "file", nodemcu_build_float: "false" },
     "micropython section": { micropython_build_type: "file", micropython_platform: "esp32" },
+    "thinx-firmware-esp8266-upy": { micropython_build_type: "firmware", micropython_platform: "esp8266" },
     "API write-back (YAML.stringify)": { devsec_ckey: "Q2tleQ==", devsec_ssid: "#home net", devsec_pass: "a: b\"\\c" }
 };
 
@@ -775,7 +1037,8 @@ describe.each(SHELLS)("infer_platform under %s", (...shell) => {
         ["thinx-firmware-esp8266-pio", { "platformio.ini": SINGLE_ENV_INI, "thinx.yml": LEGIT_YML["thinx-firmware-esp8266-pio"] }, "platformio"],
         ["thinx-firmware-esp32-pio", { "platformio.ini": SINGLE_ENV_INI, "thinx.yml": LEGIT_YML["thinx-firmware-esp32-pio"] }, "platformio"],
         ["spec arduino repository", { "thinx/thinx.ino": "void setup(){}\n", "thinx.yml": LEGIT_YML["spec/test_repositories/arduino"] }, "arduino"],
-        ["arduino-docker-build dummy", { "dummy/dummy.ino": "void setup(){}\n", "thinx.yml": LEGIT_YML["arduino-docker-build dummy (quoted)"] }, "arduino"]
+        ["arduino-docker-build dummy", { "dummy/dummy.ino": "void setup(){}\n", "thinx.yml": LEGIT_YML["arduino-docker-build dummy (quoted)"] }, "arduino"],
+        ["thinx-firmware-esp8266-upy", { "main.py": "import thinx\n", "thinx.py": "#\n", "thinx.yml": LEGIT_YML["thinx-firmware-esp8266-upy"] }, "micropython"]
     ])("legit layout %s keeps its platform", (_label, files, platform) => {
         const r = inferPlatform(shell, inferFixture(files));
         expect(r.platform).toBe(platform);
