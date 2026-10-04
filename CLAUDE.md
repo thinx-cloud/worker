@@ -53,7 +53,7 @@ that would persist them in image layers. Never log their values.
 
 ## Testing
 
-`npm test` (Jest). The full suite passes (127/127 as of 2026-10-04). A green run is
+`npm test` (Jest). The full suite passes (146/146 under bash as of 2026-10-04). A green run is
 the baseline — treat any failure as a regression from your own change.
 
 `builder.test.js` covers the shell side: `swarmbuild` and the platformio helpers
@@ -62,8 +62,12 @@ on `PATH`. `builder` runs under `/bin/sh`, which is **busybox ash** in the image
 (bash is installed but unused), so keep `builder-lib.sh` to what both accept;
 the tests run under bash and, where installed, `busybox sh`.
 
-CircleCI's `test` job only runs `npm install`, not `npm test`, so none of this
-runs in CI. Run it locally before pushing `main`.
+CircleCI's `test` job runs `npm install`, then `npm test` in
+`thinxcloud/console-build-env` (bash, no busybox), and `docker/publish`
+requires it: a red suite blocks the `thinxcloud/worker:latest` push. The
+busybox pass only runs where busybox is installed (e.g. a copy of the repo in
+`dhi.io/node:26-alpine3.24-dev` with its own `npm ci`; jest 30's resolver is
+platform-specific, so the macOS `node_modules` cannot be reused there).
 
 The two long-standing failures noted here previously (`runShell` /
 `chmodr is not a function`, and `socket must be closed` / `w.close is not a
@@ -88,3 +92,24 @@ the non-swarm path get no socket mount: they run repository content, and with
 the socket they would be root on the node. The builder images' entrypoints
 (`cmd.sh`) never call docker and the images ship no docker CLI. Do not add the
 mount back; `builder.test.js` checks both paths.
+
+### Build services are created detached
+
+`swarmbuild` runs `docker service create --detach`. Without it docker waits
+for the service to converge, and a build task that fails fast under
+`--restart-condition=none` never does: create never returned, the poll loop
+never started and the worker hung until someone removed the service
+(production, 2026-10-04). The poll loop is the one completion detector.
+
+### micropython contract (suculent/micropython-docker-build)
+
+`upy_build` in `builder-lib.sh` (and the image's `cmd.sh` / README) define it:
+the repository is mounted at `/opt/workspace` (swarm and `docker run` alike)
+and the image runs its own command; it freezes the repository's `*.py` (root,
+then `modules/`) into the firmware and writes `build/firmware.bin`. The image
+runs as an unprivileged user, so the worker recreates `build/` mode 777 first
+(removing whatever the repository had there). Success is the build's status
+plus a regular, non-symlink `build/firmware.bin` over 10000 bytes, copied to
+`DEPLOYMENT_PATH/firmware.bin`. File mode (`micropython.build.type: file`) is
+`upy_files`: the root and `modules/` `*.py` are copied as they are, and
+`OUTFILE` is `boot.py`, else `main.py`.
