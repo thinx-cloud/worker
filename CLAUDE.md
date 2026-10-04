@@ -53,8 +53,17 @@ that would persist them in image layers. Never log their values.
 
 ## Testing
 
-`npm test` (Jest). The full suite passes (60/60 as of 2026-09-29). A green run is
+`npm test` (Jest). The full suite passes (85/85 as of 2026-10-04). A green run is
 the baseline — treat any failure as a regression from your own change.
+
+`builder.test.js` covers the shell side: `swarmbuild` and the platformio helpers
+live in `builder-lib.sh` (sourced by `builder`) and run against a stub `docker`
+on `PATH`. `builder` runs under `/bin/sh`, which is **busybox ash** in the image
+(bash is installed but unused), so keep `builder-lib.sh` to what both accept;
+the tests run under bash and, where installed, `busybox sh`.
+
+CircleCI's `test` job only runs `npm install`, not `npm test`, so none of this
+runs in CI. Run it locally before pushing `main`.
 
 The two long-standing failures noted here previously (`runShell` /
 `chmodr is not a function`, and `socket must be closed` / `w.close is not a
