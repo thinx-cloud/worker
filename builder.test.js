@@ -60,6 +60,8 @@ function isAlive(pid) {
 //                     of this many bytes to <workspace>/build/firmware.bin
 //   fw_symlink        ... or a symlink to this path instead
 //   run_rc            exit status of `docker run` (default 0)
+//   attached_blocks   `service create` without --detach blocks, as docker does
+//                     for a task that fails under restart-condition=none
 const DOCKER_STUB = `#!/bin/sh
 S="$STUB_DIR"
 echo "$*" >> "$S/calls.log"
@@ -82,6 +84,16 @@ case "$1 $2" in
       prev="$a"
     done
     echo "$name" > "$S/name"
+    # Without --detach, docker waits for the service to converge; a task that
+    # fails under restart-condition=none never does, so it never returns.
+    case " $* " in *" --detach "*) ;; *)
+      if [ -f "$S/attached_blocks" ]; then
+        echo "$$" > "$S/create_pid"
+        echo "overall progress: 0 out of 1 tasks"
+        echo "1/1: task: non-zero exit (1)"
+        exec sleep 300
+      fi ;;
+    esac
     # the build itself: the image writes its output into the workspace
     if [ -f "$S/fw_size" ] && [ -n "$ws" ]; then
       head -c "$(cat "$S/fw_size")" /dev/zero > "$ws/build/firmware.bin"
@@ -162,6 +174,7 @@ function runSwarmbuild(shell, scenario) {
     fs.writeFileSync(path.join(stubDir, "ps_seq"), (scenario.ps || ["Running 1 second ago|"]).join("\n") + "\n");
     fs.writeFileSync(path.join(stubDir, "logs_final"), scenario.logs || "");
     if (scenario.hang) fs.writeFileSync(path.join(stubDir, "logs_hang"), "");
+    if (scenario.attachedBlocks) fs.writeFileSync(path.join(stubDir, "attached_blocks"), "");
 
     const logPath = path.join(dir, "build.log");
     const outPath = path.join(dir, "out.txt");
@@ -184,12 +197,15 @@ function runSwarmbuild(shell, scenario) {
         SWARMBUILD_POLL_INTERVAL: "0",
         SWARMBUILD_MAX_ITERATIONS: String(scenario.max || 8)
     });
-    const res = child_process.spawnSync(shell[0], shell.slice(1).concat(["-c", script]), { env, timeout: 20000 });
+    const res = child_process.spawnSync(shell[0], shell.slice(1).concat(["-c", script]),
+        { env, timeout: scenario.timeout || 20000 });
 
     const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : "");
     const calls = read(path.join(stubDir, "calls.log"));
     const bgPid = parseInt(read(path.join(stubDir, "bg_pid")), 10);
     if (bgPid) lingering.push(bgPid);
+    const createPid = parseInt(read(path.join(stubDir, "create_pid")), 10);
+    if (createPid) lingering.push(createPid);
     return {
         spawnError: res.error,
         rc: parseInt(read(rcPath), 10),
@@ -280,6 +296,29 @@ describe.each(SHELLS)("swarmbuild under %s", (...shell) => {
         expect(r.rc).toBe(0);
         expect(r.bgPid).toBeGreaterThan(0);
         expect(isAlive(r.bgPid)).toBe(false);
+    });
+
+    // Production 2026-10-04: without --detach, `docker service create` waits
+    // for the service to converge. A build task that fails fast (restart
+    // condition none) never converges, so create never returned, the poll
+    // loop never started and the worker hung until the service was removed.
+    test("a fast-failing task ends on the failure path: the service is created detached", () => {
+        const r = runSwarmbuild(shell, {
+            ls: ["0/1"],
+            ps: ["Failed 1 second ago|task: non-zero exit (1)"],
+            logs: "THiNX BUILD FAILED: 1\n",
+            attachedBlocks: true,
+            timeout: 8000
+        });
+        expect(r.spawnError).toBeUndefined();
+        const creates = r.calls.split("\n").filter((l) => l.startsWith("service create"));
+        expect(creates).toHaveLength(1);
+        expect(creates[0].split(" ")).toContain("--detach");
+        expect(r.rc).not.toBe(0);
+        expect(r.out).toContain("non-zero exit");
+        expect(r.out).not.toContain("Build completed.");
+        expect(r.log).toContain("THiNX BUILD FAILED");
+        expect(r.rmCalls).toBe(1);
     });
 
     // Build services run repository content; with the docker socket they
