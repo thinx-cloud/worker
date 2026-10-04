@@ -94,7 +94,12 @@ swarmbuild()
 	# socket would make it root on the node. The builder images never call
 	# docker; only the worker itself needs the socket.
 
+	# --detach: without it docker waits for the service to converge, and a
+	# task that fails fast under restart-condition=none never does, so create
+	# never returned and the poll loop below never started. The loop is the
+	# one place that decides when the build has ended.
 	SERVICE_COMMAND="docker service create \
+	--detach \
 	--restart-condition=none \
 	--container-label owner=thinx \
 	--limit-cpu=1 \
