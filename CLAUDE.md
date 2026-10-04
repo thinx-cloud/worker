@@ -53,7 +53,7 @@ that would persist them in image layers. Never log their values.
 
 ## Testing
 
-`npm test` (Jest). The full suite passes (125/125 as of 2026-10-04). A green run is
+`npm test` (Jest). The full suite passes (127/127 as of 2026-10-04). A green run is
 the baseline — treat any failure as a regression from your own change.
 
 `builder.test.js` covers the shell side: `swarmbuild` and the platformio helpers
@@ -79,3 +79,12 @@ names the caller reads, with values kept literal (no eval, no `export`,
 nothing printed). Do not reintroduce `eval`/`source` on anything derived from
 the repository. If builder needs a new thinx.yml key, add it to that `case`.
 Never echo `devsec_*` values; they are Wi-Fi credentials and keys.
+
+### Build containers never get docker.sock
+
+Only the worker itself mounts `/var/run/docker.sock` (docker-swarm.yml). The
+build services `swarmbuild` creates and the `docker run` builder containers on
+the non-swarm path get no socket mount: they run repository content, and with
+the socket they would be root on the node. The builder images' entrypoints
+(`cmd.sh`) never call docker and the images ship no docker CLI. Do not add the
+mount back; `builder.test.js` checks both paths.

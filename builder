@@ -377,13 +377,9 @@ SHA="0x00000000"
 OUTFILE="<none>"
 BUILD_SUCCESS=false
 
-# If running inside Docker, we'll start builders as siblings
-if [ -f /.dockerenv ];
-then
-	DOCKER_PREFIX="-v /var/run/docker.sock:/var/run/docker.sock"
-else
-	DOCKER_PREFIX=""
-fi
+# Builder containers are siblings started through the worker's own socket.
+# They never get the socket themselves: they run repository content, and the
+# builder images never call docker.
 
 cd $WORKDIR
 
@@ -581,7 +577,7 @@ case $PLATFORM in
 					echo "Micropython Build: Running Dockerized builder..." | tee -a "${LOG_PATH}"
 					set -o pipefail
 					docker pull suculent/micropython-docker-build
-					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v $(pwd)/modules:/micropython/esp8266/modules --workdir /micropython/esp8266 suculent/micropython-docker-build | tee -a "${LOG_PATH}"
+					docker run --cpus=1.0 --rm -t -v $(pwd)/modules:/micropython/esp8266/modules --workdir /micropython/esp8266 suculent/micropython-docker-build | tee -a "${LOG_PATH}"
 					echo "${PIPESTATUS[@]}"
 					set +o pipefail
 					if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
@@ -722,7 +718,7 @@ case $PLATFORM in
 					echo "running Docker >>>"
 					set -o pipefail
 					docker pull suculent/nodemcu-docker-build
-					docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t ${DOCKER_PARAMS} -v `pwd`:/opt/nodemcu-firmware suculent/nodemcu-docker-build build | tee -a "${LOG_PATH}"
+					docker run --cpus=1.0 --rm -t ${DOCKER_PARAMS} -v `pwd`:/opt/nodemcu-firmware suculent/nodemcu-docker-build build | tee -a "${LOG_PATH}"
 					echo "${PIPESTATUS[@]}"
 					if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
 					then
@@ -787,7 +783,7 @@ case $PLATFORM in
 			if [[ $SWARM == false ]];
 			then
 				docker pull suculent/mongoose-docker-build
-				DCMD="docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v $(pwd):/opt/mongoose-builder suculent/mongoose-docker-build"
+				DCMD="docker run --cpus=1.0 --rm -t -v $(pwd):/opt/mongoose-builder suculent/mongoose-docker-build"
 				echo "running Docker ${DCMD} >>>" | tee -a "${LOG_PATH}"
 				set -o pipefail
 				"$DCMD"
@@ -881,7 +877,7 @@ case $PLATFORM in
 				set -o pipefail
 				echo "Docker: Starting THiNX Arduino Builder Container in folder" $(pwd)
 				docker pull suculent/arduino-docker-build
-				DCMD="docker run ${DOCKER_PREFIX} --cpus=1.0 -t -v $(pwd):/opt/workspace suculent/arduino-docker-build"
+				DCMD="docker run --cpus=1.0 -t -v $(pwd):/opt/workspace suculent/arduino-docker-build"
 				echo "command: ${DCMD}"
 				$DCMD | tee -a "${LOG_PATH}"
 				#echo "PIPESTATUS ${PIPESTATUS[@]}" | tee -a "${LOG_PATH}"
@@ -1002,7 +998,7 @@ case $PLATFORM in
 				set -o pipefail
 				echo "Docker: Starting THiNX Arduino Builder Container in folder" $(pwd)
 				docker pull suculent/pine64-docker-build
-				DCMD="docker run ${DOCKER_PREFIX} --cpus=1.0 -t -v $(pwd):/opt/workspace suculent/pine64-docker-build"
+				DCMD="docker run --cpus=1.0 -t -v $(pwd):/opt/workspace suculent/pine64-docker-build"
 				echo "command: ${DCMD}"
 				$DCMD | tee -a "${LOG_PATH}"
 				#echo "PIPESTATUS ${PIPESTATUS[@]}" | tee -a "${LOG_PATH}"
@@ -1167,7 +1163,7 @@ case $PLATFORM in
 					echo "running Docker PIO >>>"
 					set -o pipefail
 					docker pull suculent/platformio-docker-build
-					DCMD=$(docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v `pwd`:/opt/workspace suculent/platformio-docker-build)
+					DCMD=$(docker run --cpus=1.0 --rm -t -v `pwd`:/opt/workspace suculent/platformio-docker-build)
 					echo "DCMD: $DCMD" | tee -a "${LOG_PATH}"
 					echo "PIPESTATUS: ${PIPESTATUS[@]}"
 					if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];

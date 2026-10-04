@@ -90,9 +90,12 @@ swarmbuild()
 
 	UNIQUE_NAME="thinx_build-$(randomstring 16)"
 
+	# No docker.sock mount: the build service runs repository content, and the
+	# socket would make it root on the node. The builder images never call
+	# docker; only the worker itself needs the socket.
+
 	SERVICE_COMMAND="docker service create \
 	--restart-condition=none \
-	--mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock \
 	--container-label owner=thinx \
 	--limit-cpu=1 \
 	--replicas=1 \
