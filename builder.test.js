@@ -19,7 +19,9 @@ function hasCommand(cmd) {
     return child_process.spawnSync("sh", ["-c", `command -v ${cmd}`]).status === 0;
 }
 
-const SHELLS = [["bash"]];
+// At least one of the two must exist, or describe.each fails on an empty table.
+const SHELLS = [];
+if (hasCommand("bash")) SHELLS.push(["bash"]);
 if (hasCommand("busybox")) SHELLS.push(["busybox", "sh"]);
 
 const tmpDirs = [];
@@ -116,7 +118,10 @@ function runSwarmbuild(shell, scenario) {
     fs.mkdirSync(stubDir);
     fs.mkdirSync(binDir);
     fs.writeFileSync(path.join(binDir, "docker"), DOCKER_STUB, { mode: 0o755 });
-    fs.writeFileSync(path.join(stubDir, "ls_seq"), scenario.ls.join("\n") + "\n");
+    // swarmbuild lists the service once right after creating it, before the
+    // poll loop; that call sees a fresh 0/1 service (or none at all).
+    const initial = scenario.ls[0] === "GONE" ? "GONE" : "0/1";
+    fs.writeFileSync(path.join(stubDir, "ls_seq"), [initial].concat(scenario.ls).join("\n") + "\n");
     fs.writeFileSync(path.join(stubDir, "ps_seq"), (scenario.ps || ["Running 1 second ago|"]).join("\n") + "\n");
     fs.writeFileSync(path.join(stubDir, "logs_final"), scenario.logs || "");
     if (scenario.hang) fs.writeFileSync(path.join(stubDir, "logs_hang"), "");
@@ -154,7 +159,8 @@ function runSwarmbuild(shell, scenario) {
         out: read(outPath),
         log: read(logPath),
         calls,
-        lsCalls: calls.split("\n").filter((l) => l.startsWith("service ls")).length,
+        // polls = `service ls` calls made by the loop, after the initial listing
+        polls: calls.split("\n").filter((l) => l.startsWith("service ls")).length - 1,
         rmCalls: calls.split("\n").filter((l) => /^service rm thinx_build-/.test(l)).length,
         bgPid
     };
@@ -175,7 +181,7 @@ describe.each(SHELLS)("swarmbuild under %s", (...shell) => {
         expect(r.out).not.toContain("Timed Out");
         expect(r.log).toContain("THiNX BUILD SUCCESSFUL.");
         expect(r.rmCalls).toBe(1);
-        expect(r.lsCalls).toBe(4);
+        expect(r.polls).toBe(4);
     });
 
     test("a task that exits non-zero ends the loop on the failure path", () => {
@@ -189,7 +195,7 @@ describe.each(SHELLS)("swarmbuild under %s", (...shell) => {
         expect(r.out).not.toContain("Build completed.");
         expect(r.log).toContain("THiNX BUILD FAILED");
         expect(r.rmCalls).toBe(1);
-        expect(r.lsCalls).toBe(2);
+        expect(r.polls).toBe(2);
     });
 
     test("a rejected task (missing image) ends the loop on the failure path", () => {
@@ -202,7 +208,7 @@ describe.each(SHELLS)("swarmbuild under %s", (...shell) => {
         expect(r.out).toContain("No such image");
         expect(r.out).not.toContain("Build completed.");
         expect(r.rmCalls).toBe(1);
-        expect(r.lsCalls).toBe(1);
+        expect(r.polls).toBe(1);
     });
 
     test("a service that disappears ends the loop as a failure", () => {
@@ -210,7 +216,7 @@ describe.each(SHELLS)("swarmbuild under %s", (...shell) => {
         expect(r.rc).not.toBe(0);
         expect(r.out).toContain("Service failure.");
         expect(r.out).not.toContain("Build completed.");
-        expect(r.lsCalls).toBe(1);
+        expect(r.polls).toBe(1);
     });
 
     test("MAX_ITERATIONS removes the service and fails", () => {
@@ -223,7 +229,7 @@ describe.each(SHELLS)("swarmbuild under %s", (...shell) => {
         expect(r.rc).not.toBe(0);
         expect(r.out).toContain("Build Timed Out");
         expect(r.rmCalls).toBe(1);
-        expect(r.lsCalls).toBe(3);
+        expect(r.polls).toBe(3);
         expect(r.log).toContain("still compiling");
     });
 
@@ -352,6 +358,18 @@ describe.each(SHELLS)("platformio environment selection under %s", (...shell) =>
         expect(r.out).toBe(path.join(dir, ".pio", "build", "d1_mini_test", "firmware.bin"));
     });
 
+    // thinx-autoflood (build 0d9c2b60, 2026-10-04): four envs, thinx.yml sets
+    // environment: d1_mini, and cmd.sh therefore built only .pio/build/d1_mini.
+    test("thinx-autoflood keeps building: multi-env with environment d1_mini", () => {
+        const dir = pioFixture(MULTI_ENV_INI, "platformio:\n  arch: esp8266\n  environment: d1_mini\n", ["d1_mini"]);
+        const r = resolvePio(shell, dir);
+        expect(r.rc).toBe(0);
+        expect(r.err).toBe("");
+        expect(r.env).toBe("d1_mini");
+        expect(r.out).toBe(path.join(dir, ".pio", "build", "d1_mini", "firmware.bin"));
+        expect(fs.existsSync(r.out)).toBe(true);
+    });
+
     test("a double-quoted environment and CRLF line endings are accepted", () => {
         const dir = pioFixture(MULTI_ENV_INI, "platformio:\r\n  environment: \"esp-relay\"\r\n  arch: esp8266\r\n", ENVS);
         const r = resolvePio(shell, dir);
@@ -427,8 +445,9 @@ describe("builder wiring", () => {
         expect(branch).not.toContain('find . -name "*.bin" | head -n 1');
     });
 
-    test("builder and builder-lib.sh parse under bash", () => {
-        expect(child_process.spawnSync("bash", ["-n", BUILDER]).status).toBe(0);
-        expect(child_process.spawnSync("bash", ["-n", LIB]).status).toBe(0);
+    test.each(SHELLS)("builder and builder-lib.sh parse under %s", (...shell) => {
+        const args = shell.slice(1).concat(["-n"]);
+        expect(child_process.spawnSync(shell[0], args.concat([BUILDER])).status).toBe(0);
+        expect(child_process.spawnSync(shell[0], args.concat([LIB])).status).toBe(0);
     });
 });

@@ -1142,75 +1142,95 @@ case $PLATFORM in
 				fi
 		  	fi
 
-			echo "[platformio] build stage... swarm: $SWARM"
-
-			if [[ $SWARM == false ]];
+			# Choose the environment before building anything. platformio
+			# builds every [env:...] when cmd.sh gets no --environment, and the
+			# old first-*.bin-found lookup then deployed whichever image it met
+			# first, possibly another board's.
+			PIO_YML=$(find "$BUILD_PATH/$REPO_NAME" -name "thinx.yml" | head -n 1)
+			PIO_BUILD_FAILED=false
+			if ! pio_resolve_env "$(pwd)" "$PIO_YML";
 			then
-				echo "running Docker PIO >>>"
-				set -o pipefail
-				docker pull suculent/platformio-docker-build
-				DCMD=$(docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v `pwd`:/opt/workspace suculent/platformio-docker-build)
-				echo "DCMD: $DCMD" | tee -a "${LOG_PATH}"
-				echo "PIPESTATUS: ${PIPESTATUS[@]}"
-				if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
-				then
-					BUILD_SUCCESS=true
-				else
-					BUILD_SUCCESS=$?
-				fi
-			else
-				swarmbuild $WORKDIR suculent/platformio-docker-build $LOG_PATH
-			fi
-
-			echo "[platformio] Docker completed <<<" | tee -a "${LOG_PATH}"
-
-			# echo "Current .pio/build folder contents after build:" | tee -a "${LOG_PATH}"
-			# ls ./.pio/build | tee -a "${LOG_PATH}"
-
-			OUTFILE=$(pio_outfile "$(pwd)")
-			
-			echo "[platformio] OUTFILE ${OUTFILE}" | tee -a "${LOG_PATH}"
-
-			if [ ! -f $OUTFILE ];
-			then
-				echo "$OUTFILE not found" | tee -a "${LOG_PATH}"
+				echo "[platformio] ${PIO_ENV_ERROR}" | tee -a "${LOG_PATH}"
+				echo "[platformio] Build refused before it started. Nothing deployed." | tee -a "${LOG_PATH}"
 				BUILD_SUCCESS=false
+				STATUS='FAILED'
 			else
-				BUILD_SUCCESS=true
-				STATUS='OK'
-				BIN_FILE=$OUTFILE
-
-				echo "OUTFILE: ${OUTFILE}" | tee -a "${LOG_PATH}"
-
-				if [[ ! -f $OUTFILE ]];
+				if [[ -n "$PIO_ENV" ]];
 				then
-					echo "OUTFILE $OUTFILE not found!" | tee -a "${LOG_PATH}"
-					BUILD_SUCCESS=false
-					exit 1
+					echo "[platformio] environment: ${PIO_ENV}" | tee -a "${LOG_PATH}"
 				fi
 
-				# once again with size limit
-				echo "Finding 10k> bin files in $BUILD_PATH/$REPO_NAME"
-				if [[ -z "$(find . -name '*.bin' -type f -size +10000c 2>/dev/null)" ]];
+				echo "[platformio] build stage... swarm: $SWARM"
+
+				if [[ $SWARM == false ]];
 				then
-					BUILD_SUCCESS=false
-					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
-					# ls -la | tee -a "${LOG_PATH}"
+					echo "running Docker PIO >>>"
+					set -o pipefail
+					docker pull suculent/platformio-docker-build
+					DCMD=$(docker run ${DOCKER_PREFIX} --cpus=1.0 --rm -t -v `pwd`:/opt/workspace suculent/platformio-docker-build)
+					echo "DCMD: $DCMD" | tee -a "${LOG_PATH}"
+					echo "PIPESTATUS: ${PIPESTATUS[@]}"
+					if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
+					then
+						BUILD_SUCCESS=true
+					else
+						BUILD_SUCCESS=$?
+					fi
 				else
-					echo "Docker build succeeded." | tee -a "${LOG_PATH}"
-					echo "Zipping artifacts to ${BUILD_ID}.zip..." | tee -a "${LOG_PATH}"
-
-					zip -rq "${BUILD_PATH}/${BUILD_ID}.zip" ${BIN_FILE} ./build/**
-
-					echo "Copying deployment data..." | tee -a "${LOG_PATH}"
-
-					cp -vf "${BIN_FILE}" "$TARGET_PATH" | tee -a "${LOG_PATH}"
-					cp -vf "${BIN_FILE}" "$DEPLOYMENT_PATH" | tee -a "${LOG_PATH}"
-					cp -vf "${BUILD_PATH}/${BUILD_ID}.zip" "$DEPLOYMENT_PATH" | tee -a "${LOG_PATH}"
+					if ! swarmbuild "$WORKDIR" suculent/platformio-docker-build "$LOG_PATH";
+					then
+						PIO_BUILD_FAILED=true
+					fi
 				fi
 
+				echo "[platformio] Docker completed <<<" | tee -a "${LOG_PATH}"
+
+				if [[ "$PIO_BUILD_FAILED" == true ]];
+				then
+					# failed, rejected, timed out or vanished: whatever sits in
+					# .pio/build is not this build's image
+					echo "[platformio] Build service ended: ${SWARMBUILD_OUTCOME}. Nothing deployed." | tee -a "${LOG_PATH}"
+					BUILD_SUCCESS=false
+					STATUS='FAILED'
+				else
+					OUTFILE=$(pio_outfile "$(pwd)" "$PIO_ENV")
+
+					echo "[platformio] OUTFILE ${OUTFILE}" | tee -a "${LOG_PATH}"
+
+					if [ ! -f "$OUTFILE" ];
+					then
+						echo "$OUTFILE not found" | tee -a "${LOG_PATH}"
+						BUILD_SUCCESS=false
+						STATUS='FAILED'
+					else
+						BUILD_SUCCESS=true
+						STATUS='OK'
+						BIN_FILE=$OUTFILE
+
+						echo "OUTFILE: ${OUTFILE}" | tee -a "${LOG_PATH}"
+
+						# size limit on the image that gets deployed, not on any .bin
+						if [[ -z "$(find "$OUTFILE" -type f -size +10000c 2>/dev/null)" ]];
+						then
+							BUILD_SUCCESS=false
+							STATUS='FAILED'
+							echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
+						else
+							echo "Docker build succeeded." | tee -a "${LOG_PATH}"
+							echo "Zipping artifacts to ${BUILD_ID}.zip..." | tee -a "${LOG_PATH}"
+
+							zip -rq "${BUILD_PATH}/${BUILD_ID}.zip" ${BIN_FILE} ./build/**
+
+							echo "Copying deployment data..." | tee -a "${LOG_PATH}"
+
+							cp -vf "${BIN_FILE}" "$TARGET_PATH" | tee -a "${LOG_PATH}"
+							cp -vf "${BIN_FILE}" "$DEPLOYMENT_PATH" | tee -a "${LOG_PATH}"
+							cp -vf "${BUILD_PATH}/${BUILD_ID}.zip" "$DEPLOYMENT_PATH" | tee -a "${LOG_PATH}"
+						fi
+					fi
+				fi
 			fi
-			
+
 			echo "[platformio] Docker build completed with BUILD_SUCCESS ${BUILD_SUCCESS}" | tee -a "${LOG_PATH}"
 			
 		;;
