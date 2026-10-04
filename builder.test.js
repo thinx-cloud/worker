@@ -246,6 +246,24 @@ describe.each(SHELLS)("swarmbuild under %s", (...shell) => {
         expect(isAlive(r.bgPid)).toBe(false);
     });
 
+    // Build services run repository content; with the docker socket they
+    // would be root on the swarm node (T-23-14 containment).
+    test("the build service is created without the docker.sock mount", () => {
+        const r = runSwarmbuild(shell, {
+            ls: ["0/1"],
+            ps: ["Complete 1 second ago|"],
+            logs: "THiNX BUILD SUCCESSFUL.\n"
+        });
+        expect(r.rc).toBe(0);
+        const creates = r.calls.split("\n").filter((l) => l.startsWith("service create"));
+        expect(creates).toHaveLength(1);
+        expect(creates[0]).not.toContain("docker.sock");
+        // the workspace, deploy and repos mounts are still there
+        expect(creates[0]).toContain("destination=/opt/workspace");
+        expect(creates[0]).toContain("destination=/mnt/data/deploy");
+        expect(creates[0]).toContain("destination=/mnt/data/repos");
+    });
+
     test("the first poll is quick and later polls stay at or under 30 s", () => {
         const env = Object.assign({}, process.env);
         delete env.SWARMBUILD_FIRST_POLL;
@@ -444,6 +462,23 @@ describe("builder wiring", () => {
         expect(resolveAt).toBeLessThan(branch.indexOf("swarmbuild "));
         expect(resolveAt).toBeLessThan(branch.indexOf("docker run"));
         expect(branch).not.toContain('find . -name "*.bin" | head -n 1');
+    });
+
+    // The non-swarm path starts builder images with `docker run`; inside a
+    // container it used to add -v /var/run/docker.sock:/var/run/docker.sock
+    // through DOCKER_PREFIX. None of the builder images call docker.
+    test("no docker run of a builder image passes the docker socket", () => {
+        const code = (text) => text.split("\n").filter((l) => !/^\s*#/.test(l));
+        const runs = code(builder).filter((l) => /\bdocker run\b/.test(l));
+        expect(runs.length).toBeGreaterThanOrEqual(6);
+        for (const l of runs) {
+            expect(l).not.toContain("docker.sock");
+        }
+        // nothing (DOCKER_PREFIX or otherwise) adds a socket mount; the only
+        // remaining mention is the operator message about the worker's own socket
+        const mounts = code(builder).concat(code(lib))
+            .filter((l) => /docker\.sock/.test(l) && !/^\s*echo\b/.test(l));
+        expect(mounts).toEqual([]);
     });
 
     test.each(SHELLS)("builder and builder-lib.sh parse under %s", (...shell) => {
