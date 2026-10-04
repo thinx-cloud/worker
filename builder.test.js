@@ -786,6 +786,34 @@ describe("builder wiring", () => {
     });
 });
 
+// --- CI ----------------------------------------------------------------------
+//
+// CircleCI's `test` job used to run only `npm install`, so none of this ran
+// before docker/publish pushed thinxcloud/worker:latest.
+
+describe("CircleCI runs this suite before publishing", () => {
+
+    const config = fs.readFileSync(path.join(__dirname, ".circleci", "config.yml"), "utf8");
+    // the job body: from "  test:" under jobs to the next top-level key
+    const job = (() => {
+        const start = config.indexOf("\n  test:\n");
+        if (start < 0) return "";
+        const end = config.indexOf("\nworkflows:", start);
+        return config.slice(start, end < 0 ? undefined : end);
+    })();
+
+    test("the test job runs npm test", () => {
+        expect(job).not.toBe("");
+        const commands = job.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+        expect(commands).toMatch(/^\s*(command:\s*)?npm (run )?test\b/m);
+    });
+
+    test("docker/publish still requires the test job", () => {
+        const publish = config.slice(config.indexOf("- docker/publish:"));
+        expect(publish).toMatch(/requires:\s*\n\s*- test\b/);
+    });
+});
+
 // --- thinx.yml loader (T-23-14) ----------------------------------------------
 //
 // thinx.yml comes from the user's repository and the worker runs as root with
