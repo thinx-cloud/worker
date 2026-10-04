@@ -438,3 +438,111 @@ pio_outfile()
 		echo "$1/$(cd "$1" && find . -name "*.bin" | head -n 1)"
 	fi
 }
+
+# --- micropython (suculent/micropython-docker-build) -------------------------
+#
+# Contract with the image (its cmd.sh and README, "THiNX worker contract"):
+#  - the repository (WORKDIR) is mounted at /opt/workspace and the image runs
+#    its own command; no --workdir, no modules/-only mount;
+#  - the image freezes the repository's *.py (its root, then modules/) into
+#    the firmware and writes /opt/workspace/build/firmware.bin;
+#  - the image runs as an unprivileged user, so build/ is made here, mode 777.
+#    Whatever the repository has at build/ goes first (rm on a symlink removes
+#    the link), so neither a committed image nor a link out of the workspace
+#    is deployed or chmod'ed;
+#  - success is the build's own status (swarmbuild: task Complete; docker run:
+#    exit 0) and a regular, non-symlink build/firmware.bin over 10000 bytes,
+#    which is copied to DEPLOYMENT_PATH/firmware.bin.
+UPY_IMAGE=suculent/micropython-docker-build
+
+# upy_build SWARM WORKDIR DEPLOYMENT_PATH LOG_PATH: builds the firmware image.
+# Returns 0 and sets UPY_OUTFILE to the deployed image, or returns 1 with
+# UPY_OUTFILE empty and nothing deployed.
+upy_build()
+{
+	upy_swarm=$1
+	upy_workdir=$2
+	upy_deploy=$3
+	upy_log=$4
+	UPY_OUTFILE=""
+
+	rm -rf "$upy_workdir/build" "$upy_deploy/firmware.bin"
+	if ! mkdir "$upy_workdir/build" || ! chmod 777 "$upy_workdir/build";
+	then
+		echo "[micropython] Cannot create the build output directory. Nothing deployed." | tee -a "$upy_log"
+		return 1
+	fi
+
+	if [ "$upy_swarm" = true ];
+	then
+		if ! swarmbuild "$upy_workdir" "$UPY_IMAGE" "$upy_log";
+		then
+			echo "[micropython] Build service ended: ${SWARMBUILD_OUTCOME}. Nothing deployed." | tee -a "$upy_log"
+			return 1
+		fi
+	else
+		docker pull "$UPY_IMAGE"
+		# busybox ash has no PIPESTATUS: the status goes through a file
+		upy_rc_file=$(mktemp)
+		( docker run --cpus=1.0 --rm -t -v "$upy_workdir":/opt/workspace "$UPY_IMAGE" 2>&1; echo "$?" > "$upy_rc_file" ) | tee -a "$upy_log"
+		upy_rc=$(cat "$upy_rc_file")
+		rm -f "$upy_rc_file"
+		if [ "$upy_rc" != "0" ];
+		then
+			echo "[micropython] Build container exited with ${upy_rc}. Nothing deployed." | tee -a "$upy_log"
+			return 1
+		fi
+	fi
+
+	upy_image="$upy_workdir/build/firmware.bin"
+	if [ -L "$upy_image" ] || [ ! -f "$upy_image" ];
+	then
+		echo "[micropython] No firmware image at build/firmware.bin. Nothing deployed." | tee -a "$upy_log"
+		return 1
+	fi
+	if [ -z "$(find "$upy_image" -type f -size +10000c 2>/dev/null)" ];
+	then
+		echo "Docker build failed, build artifact size is below 10k." | tee -a "$upy_log"
+		return 1
+	fi
+	if ! cp "$upy_image" "$upy_deploy/firmware.bin";
+	then
+		echo "[micropython] Cannot copy the firmware image to the deployment path." | tee -a "$upy_log"
+		return 1
+	fi
+	UPY_OUTFILE="$upy_deploy/firmware.bin"
+	echo "[micropython] Deployed $(wc -c < "$UPY_OUTFILE" | tr -d ' ') bytes: ${UPY_OUTFILE}" | tee -a "$upy_log"
+	return 0
+}
+
+# upy_files WORKDIR DEPLOYMENT_PATH: file mode (micropython.build.type file).
+# Copies the regular *.py of the repository root, then of modules/ (same
+# order as the image freezes them; symlinks are skipped), into the
+# deployment. Returns 0 and sets UPY_OUTFILE to the deployed boot.py, else
+# main.py; returns 1 with UPY_OUTFILE empty when there is neither.
+upy_files()
+{
+	upy_workdir=$1
+	upy_deploy=$2
+	UPY_OUTFILE=""
+
+	for upy_dir in "$upy_workdir" "$upy_workdir/modules"
+	do
+		[ -d "$upy_dir" ] && [ ! -L "$upy_dir" ] || continue
+		for upy_src in "$upy_dir"/*.py
+		do
+			[ -f "$upy_src" ] && [ ! -L "$upy_src" ] || continue
+			cp -f "$upy_src" "$upy_deploy/"
+		done
+	done
+
+	for upy_name in boot.py main.py
+	do
+		if [ -f "$upy_deploy/$upy_name" ] && [ ! -L "$upy_deploy/$upy_name" ];
+		then
+			UPY_OUTFILE="$upy_deploy/$upy_name"
+			return 0
+		fi
+	done
+	return 1
+}

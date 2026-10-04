@@ -714,7 +714,8 @@ describe("builder wiring", () => {
     // through DOCKER_PREFIX. None of the builder images call docker.
     test("no docker run of a builder image passes the docker socket", () => {
         const code = (text) => text.split("\n").filter((l) => !/^\s*#/.test(l));
-        const runs = code(builder).filter((l) => /\bdocker run\b/.test(l));
+        // micropython's docker run lives in builder-lib.sh (upy_build)
+        const runs = code(builder).concat(code(lib)).filter((l) => /\bdocker run\b/.test(l));
         expect(runs.length).toBeGreaterThanOrEqual(6);
         for (const l of runs) {
             expect(l).not.toContain("docker.sock");

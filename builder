@@ -527,101 +527,51 @@ case $PLATFORM in
 
     micropython)
 
-		  # WARNING! This is a specific builder (like NodeMCU).
-			# Injects thinx to esp8266/modules in firmware mode. Should also prebuild SPIFFS.
+			# suculent/micropython-docker-build gets the repository at
+			# /opt/workspace and writes build/firmware.bin; see upy_build in
+			# builder-lib.sh for the contract. File mode builds nothing: the
+			# repository's *.py are deployed as they are.
 
 			BUILD_TYPE=$micropython_build_type
+			OUTPATH=${DEPLOYMENT_PATH}
+
 			if [[ "$BUILD_TYPE" == "file" ]];
 			then
 				echo "Build type: file" | tee -a "${LOG_PATH}"
-				OUTFILE=${DEPLOYMENT_PATH}/boot.py
-				cp -vf $WORKDIR/*.py ${DEPLOYMENT_PATH} # copy all .py files without building
-				zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" | tee -a "${LOG_PATH}" ./* # zip artefacts
+				if upy_files "$WORKDIR" "$DEPLOYMENT_PATH";
+				then
+					BUILD_SUCCESS=true
+					OUTFILE=$UPY_OUTFILE
+					ls "$DEPLOYMENT_PATH" | tee -a "${LOG_PATH}"
+					zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ${DEPLOYMENT_PATH}/*.py # zip artefacts
+				else
+					echo "Micropython Build: no boot.py or main.py to deploy." | tee -a "${LOG_PATH}"
+					BUILD_SUCCESS=false
+				fi
 			else
 				echo "Build type: firmware (or undefined)" | tee -a "${LOG_PATH}"
-				OUTFILE=${DEPLOYMENT_PATH}/firmware.bin
-				if [[ -z "$(find $OUTFILE -type f -size +10000c 2>/dev/null)" ]];
+				echo "Micropython Build: Running Dockerized builder..." | tee -a "${LOG_PATH}"
+				if upy_build "$SWARM" "$WORKDIR" "$DEPLOYMENT_PATH" "$LOG_PATH";
 				then
-					rm -rf $OUTFILE
-					BUILD_SUCCESS=false
-					echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
-				fi
-			fi
-
-			OUTPATH=${DEPLOYMENT_PATH}
-
-			echo "Micropython Build: Customizing firmware..." | tee -a "${LOG_PATH}"
-
-			UPY_FILES=$(find $WORKDIR -name *.py)
-
-			for pyfile in ${UPY_FILES[@]}; do
-				if [[ "$BUILD_TYPE" == "firmware" ]];
-				then
-					FSPATH=$WORKDIR/$(basename ${pyfile}) # we should already stand in this folder
-					if [[ -f "$FSPATH" ]];
-					then
-						rm -rf $FSPATH
-						cp -vf "${pyfile}" $FSPATH
-						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${pyfile} ./* # zip artefacts
-					fi
+					BUILD_SUCCESS=true
+					OUTFILE=$UPY_OUTFILE
+					echo "Zipping artifacts to ${BUILD_ID}.zip..." | tee -a "${LOG_PATH}"
+					zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ${OUTFILE} # zip artefacts
 				else
-					cp -vf "${pyfile}" "$DEPLOYMENT_PATH"
-					zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${pyfile} ./* # zip artefacts
+					BUILD_SUCCESS=false
+					OUTFILE=${DEPLOYMENT_PATH}/firmware.bin # absent: reported as <none>
 				fi
-			done
-
-			if [[ $SWARM == false ]];
-			then
-				if [[ "$BUILD_TYPE" == "firmware" ]];
-				then
-					echo "Micropython Build: Running Dockerized builder..." | tee -a "${LOG_PATH}"
-					set -o pipefail
-					docker pull suculent/micropython-docker-build
-					docker run --cpus=1.0 --rm -t -v $(pwd)/modules:/micropython/esp8266/modules --workdir /micropython/esp8266 suculent/micropython-docker-build | tee -a "${LOG_PATH}"
-					echo "${PIPESTATUS[@]}"
-					set +o pipefail
-					if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
-					then
-						BUILD_SUCCESS=true
-						echo "Zipping artifacts to ${BUILD_ID}.zip..." | tee -a "${LOG_PATH}"
-						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./build/** # zip artefacts
-					fi
-					if [[ -z "$(find $OUTFILE -type f -size +10000c 2>/dev/null)" ]];
-					then
-						rm -rf $OUTFILE
-						BUILD_SUCCESS=false
-						echo "Docker build failed, build artifact size is below 10k." | tee -a "${LOG_PATH}"
-					fi
-					echo "[micropython] Docker completed <<<"
-				fi
-			else
-				swarmbuild $WORKDIR suculent/micropython-docker-build $LOG_PATH
+				echo "[micropython] Docker completed <<<"
 			fi
-
-
-			# ls | tee -a "${LOG_PATH}"
 
 			if [[ ! ${RUN} ]];
 			then
 				echo "☢ Dry-run ${BUILD_ID} completed. Skipping actual deployment." | tee -a "${LOG_PATH}"
 				STATUS='DRY_RUN_OK'
 			else
-				# Check Artifacts
 				if [[ $BUILD_SUCCESS == true ]] ;
 				then
-					echo "NodeMCU Build: Listing output directory: " | tee -a "${LOG_PATH}"
-					pwd | tee -a "${LOG_PATH}"
-					# ls | tee -a "${LOG_PATH}"
-					echo "NodeMCU Build: Listing binary artifacts: " | tee -a "${LOG_PATH}"
-					# ls ./bin | tee -a "${LOG_PATH}"
-					if [[ "$BUILD_TYPE" == "firmware" ]];
-					then
-						cp -v ./build/*.bin "$OUTPATH" | tee -a "${LOG_PATH}"
-						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./build/* # zip artefacts
-						rm -rf ./build/*
-					fi
 					echo "Micropython Build: DEPLOYMENT_PATH: " $DEPLOYMENT_PATH
-					ls "$DEPLOYMENT_PATH" | tee -a "${LOG_PATH}"
 					STATUS='OK'
 				else
 					STATUS='FAILED'
