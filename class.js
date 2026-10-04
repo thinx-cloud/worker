@@ -190,8 +190,8 @@ module.exports = class Worker {
     // SEC-EXEC-02 (D-02): every argv element must be a string that is either the
     // bare `--dry-run` or `--<name>=<value>` with <name> in ALLOWED_ARGV_FLAGS, and
     // must pass isArgumentSafe. shell:false already stops the metacharacters from
-    // reaching a shell here, but the bash builder later evals parsed YAML and may
-    // interpolate these values, and the legacy path refused the same characters
+    // reaching a shell here, but the bash builder may later interpolate these
+    // values unquoted, and the legacy path refused the same characters
     // over the whole command string, so the acceptance set stays exactly the same.
     // An element that does not start with `--` (e.g. a program path) is refused:
     // the job can never name the program.

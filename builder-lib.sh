@@ -184,6 +184,139 @@ swarmbuild()
 	[ "$SWARMBUILD_OUTCOME" = "complete" ]
 }
 
+# --- thinx.yml loader (T-23-14) ----------------------------------------------
+#
+# thinx.yml belongs to the user's repository, and the worker runs as root with
+# docker.sock, so the file is never eval'd or sourced. It used to be: infer's
+# parse_yaml printed `export name="value"` lines that builder and
+# infer_platform then eval'd, so a value like $(...) or `...` ran here.
+#
+# thinx_yml_load FILE SCOPE reads FILE with awk and assigns, with plain
+# `name=$value` assignments, only the names its caller reads:
+#   builder: devsec_ssid devsec_pass devsec_ckey nodemcu_build_type
+#            nodemcu_build_float micropython_build_type micropython_platform
+#   infer:   platformio arduino micropython mongoose nodejs
+# Any other name, or any other scope, is ignored. Nothing is exported and
+# nothing is printed (devsec values are Wi-Fi credentials and keys).
+#
+# Names follow parse_yaml: the parent keys joined with "_" (two spaces of
+# indent per level), e.g. devsec: / ssid: -> devsec_ssid. Values:
+#  - key: "..."  quotes dropped; \" and \\ decoded (YAML escapes that eval
+#    used to decode the same way); any other backslash stays as it is;
+#  - key: ...    taken as written: $, `, ;, \ and quotes stay literal;
+#  - a trailing CR (CRLF files) is dropped;
+#  - a value that continues on the next line (block scalar |/>, folded plain
+#    or multi-line quoted scalar) or holds a control character other than
+#    tab (NUL included) is rejected; its variable is left as it was.
+# A missing FILE sets nothing. Returns 0.
+thinx_yml_load()
+{
+	[ -f "$1" ] || return 0
+
+	thinx_yml_pairs=$(tr '\000' '\001' < "$1" | awk '
+		function unescape_dq(s,    out, i, n, c, d) {
+			out = ""
+			n = length(s)
+			for (i = 1; i <= n; i++) {
+				c = substr(s, i, 1)
+				if (c == "\\" && i < n) {
+					d = substr(s, i + 1, 1)
+					if (d == "\\" || d == "\"") {
+						out = out d
+						i++
+						continue
+					}
+				}
+				out = out c
+			}
+			return out
+		}
+		function flush() {
+			if (pending != "") print pending
+			pending = ""
+		}
+		{
+			line = $0
+			sub(/\r$/, "", line)
+			match(line, /^[ \t]*/)
+			ind = substr(line, 1, RLENGTH)
+			rest = substr(line, RLENGTH + 1)
+			match(rest, /^[A-Za-z0-9_]*/)
+			key = substr(rest, 1, RLENGTH)
+			rest = substr(rest, RLENGTH + 1)
+
+			if (rest ~ /^[ \t]*:[ \t]*".*"[ \t]*$/) {
+				style = "dq"
+			} else if (rest ~ /^[ \t]*[:-]/) {
+				style = "plain"
+			} else {
+				# Not a key line. Blank lines and comments are skipped;
+				# anything else continues the previous value, which is
+				# then multi-line and rejected.
+				if (line !~ /^[ \t]*(#.*)?$/) pending = ""
+				next
+			}
+
+			flush()
+
+			indent = length(ind) / 2
+			vname[indent] = key
+			for (i in vname) { if (i > indent) { delete vname[i] } }
+
+			value = rest
+			if (style == "dq") {
+				sub(/^[ \t]*:[ \t]*"/, "", value)
+				sub(/"[ \t]*$/, "", value)
+				value = unescape_dq(value)
+			} else {
+				sub(/^[ \t]*[:-][ \t]*/, "", value)
+			}
+
+			if (length(value) == 0) next
+			if (style == "plain" && value ~ /^[|>][-+0-9]*[ \t]*$/) next
+
+			tabless = value
+			gsub(/\t/, "", tabless)
+			if (tabless ~ /[[:cntrl:]]/) next
+
+			vn = ""
+			for (i = 0; i < indent; i++) { vn = (vn)(vname[i])("_") }
+			name = vn key
+			sub(/_$/, "", name)
+			if (name !~ /^[A-Za-z_][A-Za-z0-9_]*$/) next
+
+			pending = name "=" value
+		}
+		END { flush() }
+	')
+
+	# The here-document expands $thinx_yml_pairs once; its text is not
+	# expanded again, and each value is assigned, never evaluated.
+	while IFS= read -r thinx_yml_line
+	do
+		thinx_yml_value=${thinx_yml_line#*=}
+		case "$2:${thinx_yml_line%%=*}" in
+			builder:devsec_ssid) devsec_ssid=$thinx_yml_value ;;
+			builder:devsec_pass) devsec_pass=$thinx_yml_value ;;
+			builder:devsec_ckey) devsec_ckey=$thinx_yml_value ;;
+			builder:nodemcu_build_type) nodemcu_build_type=$thinx_yml_value ;;
+			builder:nodemcu_build_float) nodemcu_build_float=$thinx_yml_value ;;
+			builder:micropython_build_type) micropython_build_type=$thinx_yml_value ;;
+			builder:micropython_platform) micropython_platform=$thinx_yml_value ;;
+			infer:platformio) platformio=$thinx_yml_value ;;
+			infer:arduino) arduino=$thinx_yml_value ;;
+			infer:micropython) micropython=$thinx_yml_value ;;
+			infer:mongoose) mongoose=$thinx_yml_value ;;
+			infer:nodejs) nodejs=$thinx_yml_value ;;
+		esac
+	done <<THINX_YML_PAIRS
+$thinx_yml_pairs
+THINX_YML_PAIRS
+
+	unset thinx_yml_pairs thinx_yml_line thinx_yml_value
+	return 0
+}
+
 # --- platformio environment selection ----------------------------------------
 #
 # thinx.yml and platformio.ini come from the user's repository, so they are

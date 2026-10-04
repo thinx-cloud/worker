@@ -6,7 +6,7 @@ then
 	exit 1
 fi
 
-source ./infer # utility functions like parse_yaml
+source ./infer # infer_platform and the descriptor helpers
 
 # swarmbuild, randomstring and the platformio helpers
 BUILDER_LIB="$(dirname "$0")/builder-lib.sh"
@@ -304,8 +304,9 @@ then
 	#echo "Found ${YML}, reading..." | tee -a "${LOG_PATH}"
 	echo "Reading thinx.yml build configuration: $YML"
 	echo "Parsing YAML..."
-	PARSED=$(parse_yaml "$YML" "")
-	eval "$PARSED"
+	# never eval'd (T-23-14): only the names builder reads are assigned,
+	# values stay literal; see thinx_yml_load in builder-lib.sh
+	thinx_yml_load "$YML" builder
 else
 	exit 3
 fi
@@ -425,19 +426,19 @@ then
 				if [[ "${keyname}" == "pass" ]];
 				then
 					devsec_pass=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
-					echo "Overriding devsec_pass: ${devsec_pass}" | tee -a "${LOG_PATH}"
+					echo "Overriding devsec_pass from environment.json" | tee -a "${LOG_PATH}"
 				fi
 
 				if [[ "${keyname}" == "ssid" ]];
 				then
 					devsec_ssid=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
-					echo "Overriding devsec_ssid: ${devsec_ssid}" | tee -a "${LOG_PATH}"
+					echo "Overriding devsec_ssid from environment.json" | tee -a "${LOG_PATH}"
 				fi
 
 				if [[ "${keyname}" == "ckey" ]];
 				then
 					devsec_ckey=$(echo ${VAL} | sed 's/^"//;s/\"*$//') # trim leading/trailing '\"'
-					echo "Overriding devsec_ckey: ${devsec_ckey}" | tee -a "${LOG_PATH}"
+					echo "Overriding devsec_ckey from environment.json" | tee -a "${LOG_PATH}"
 				fi
 
 			done < <(jq -r 'keys[]' $ENVS)
@@ -461,9 +462,7 @@ if [[ ! -z "$SIGNATURE_FILE" ]];
 			# WARNING! INSECURE DEBUG! Remove when not needed.
 			echo "[REM DevSec] MAC: ${MAC}" | tee -a "${LOG_PATH}"
 			echo "[REM DevSec] FCID: ${FCID}" | tee -a "${LOG_PATH}"
-			echo "[REM DevSec] devsec_ssid: ${devsec_ssid}" | tee -a "${LOG_PATH}"
-			echo "[REM DevSec] devsec_pass: ${devsec_pass}" | tee -a "${LOG_PATH}"
-			echo "[REM DevSec] devsec_ckey: ${devsec_ckey}" | tee -a "${LOG_PATH}"
+			# devsec_ssid / devsec_pass / devsec_ckey are credentials: never logged
 
 			SAVED_IFS=$IFS
 			IFS='+'
@@ -482,7 +481,8 @@ if [[ ! -z "$SIGNATURE_FILE" ]];
 				exit 0
 			fi
 		else
-			echo "[DevSec] Skipping, configuration incomplete. FCID: $FCID, MAC: $MAC, CKEY: ${devsec_ckey} " | tee -a "${LOG_PATH}"
+			if [[ -n "${devsec_ckey}" ]]; then DEVSEC_CKEY_STATE="set"; else DEVSEC_CKEY_STATE="missing"; fi
+			echo "[DevSec] Skipping, configuration incomplete. FCID: $FCID, MAC: $MAC, CKEY: ${DEVSEC_CKEY_STATE}" | tee -a "${LOG_PATH}"
 		fi
 	else
 		echo "[DevSec] Signature file not found at $SIGNATURE_FILE in $(ls)" | tee -a "${LOG_PATH}"

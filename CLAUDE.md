@@ -53,7 +53,7 @@ that would persist them in image layers. Never log their values.
 
 ## Testing
 
-`npm test` (Jest). The full suite passes (85/85 as of 2026-10-04). A green run is
+`npm test` (Jest). The full suite passes (125/125 as of 2026-10-04). A green run is
 the baseline — treat any failure as a regression from your own change.
 
 `builder.test.js` covers the shell side: `swarmbuild` and the platformio helpers
@@ -69,3 +69,13 @@ The two long-standing failures noted here previously (`runShell` /
 `chmodr is not a function`, and `socket must be closed` / `w.close is not a
 function`) are both fixed. `Worker` still has no `close()`; the socket test now
 calls `disconnect(true)` on the server-side socket instead.
+
+### thinx.yml is never eval'd
+
+thinx.yml is repository content. `builder` and `infer_platform` read it only
+through `thinx_yml_load FILE builder|infer` in `builder-lib.sh`: awk parses it
+the way the old `parse_yaml` did, and a fixed `case` allowlist assigns only the
+names the caller reads, with values kept literal (no eval, no `export`,
+nothing printed). Do not reintroduce `eval`/`source` on anything derived from
+the repository. If builder needs a new thinx.yml key, add it to that `case`.
+Never echo `devsec_*` values; they are Wi-Fi credentials and keys.

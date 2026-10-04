@@ -4,28 +4,6 @@
 
 export THINX_ROOT=/opt/thinx/thinx-device-api
 
-function parse_yaml
-{
-    local prefix=$2
-    local s
-    local w
-    local fs
-    s='[[:space:]]*'
-    w='[a-zA-Z0-9_]*'
-    fs="$(echo @|tr @ '\034')"
-    sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
-        -e "s|^\($s\)\($w\)$s[:-]$s\(.*\)$s\$|\1$fs\2$fs\3|p" "$1" |
-    awk -F"$fs" '{
-    indent = length($1)/2;
-    vname[indent] = $2;
-    for (i in vname) {if (i > indent) {delete vname[i]}}
-        if (length($3) > 0) {
-            vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
-            printf("export %s%s%s=\"%s\"\n", "'"$prefix"'",vn, $2, $3);
-        }
-    }' | sed 's/_=/=/g'
-}
-
 function infer_platform
 {
 		local path=$1
@@ -94,25 +72,29 @@ function infer_platform
 			platform="mongoose"
 		fi
 
-    	# Override from YAML
+    	# Override from YAML: a top-level scalar such as `nodejs: true` names the
+		# platform. thinx.yml is repository content, so it is never eval'd
+		# (T-23-14): thinx_yml_load (builder-lib.sh) assigns only these five
+		# names and keeps values literal. They are local and start empty, so
+		# values inherited from the caller cannot pick the platform.
+		local platformio="" arduino="" micropython="" mongoose="" nodejs=""
 		YMLFILE=$(find $path -name "thinx.yml" -maxdepth 1 | head -n 1)
 		if [[ -f "$YMLFILE" ]]; then
-		  YML=$(parse_yaml "$YMLFILE" "")
-		  eval "$YML"
+			thinx_yml_load "$YMLFILE" infer
 			if [[ ! -z $platformio ]]; then
-				platform = "platformio"
+				platform="platformio"
 			fi
-      		if [[ ! -z $arduino ]]; then
-				platform = "arduino"
+			if [[ ! -z $arduino ]]; then
+				platform="arduino"
 			fi
-			if [[ ! -z $microphython ]]; then
-				platform = "micropython"
+			if [[ ! -z $micropython ]]; then
+				platform="micropython"
 			fi
 			if [[ ! -z $mongoose ]]; then
-				platform = "mongoose"
+				platform="mongoose"
 			fi
 			if [[ ! -z $nodejs ]]; then
-				platform = "nodejs"
+				platform="nodejs"
 			fi
 		fi
 
