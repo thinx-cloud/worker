@@ -733,10 +733,16 @@ case $PLATFORM in
 			if [[ $SWARM == false ]];
 			then
 				docker pull suculent/mongoose-docker-build
-				DCMD="docker run --cpus=1.0 --rm -t -v $(pwd):/opt/mongoose-builder suculent/mongoose-docker-build"
+				# /opt/workspace: the same mount every other builder image uses, and
+				# what swarmbuild mounts -- the image used to expect
+				# /opt/mongoose-builder, so swarm builds ran in an empty directory.
+				DCMD="docker run --cpus=1.0 --rm -t -v $(pwd):/opt/workspace suculent/mongoose-docker-build"
 				echo "running Docker ${DCMD} >>>" | tee -a "${LOG_PATH}"
 				set -o pipefail
-				"$DCMD"
+				# Unquoted on purpose: quoted, bash looked for one executable literally
+				# named "docker run --cpus=1.0 ..." and the build never started. The
+				# tee is what puts "THiNX BUILD SUCCESSFUL" into the log grepped below.
+				$DCMD | tee -a "${LOG_PATH}"
 				echo "${PIPESTATUS[@]}"
 				if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
 				then

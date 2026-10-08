@@ -779,6 +779,24 @@ describe("builder wiring", () => {
         expect(branch).not.toMatch(/rm -rf \$FSPATH/);
     });
 
+    // The mongoose branch used to run `"$DCMD"` -- quoted, so bash looked
+    // for one executable literally named "docker run --cpus=1.0 ..." and no
+    // build ever started -- and mounted /opt/mongoose-builder, while swarmbuild
+    // mounts /opt/workspace like every other image: swarm builds ran in an
+    // empty directory.
+    test("the mongoose branch runs docker unquoted, logged, on /opt/workspace", () => {
+        const start = builder.indexOf("\n    mongoose)\n");
+        expect(start).toBeGreaterThan(-1);
+        const end = builder.indexOf("\n\t\tarduino)\n", start);
+        expect(end).toBeGreaterThan(start);
+        // comments explain the old contract, so judge the code lines only
+        const branch = builder.slice(start, end).split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+        expect(branch).not.toContain('"$DCMD"');
+        expect(branch).toMatch(/^\t*\$DCMD \| tee -a "\$\{LOG_PATH\}"$/m);
+        expect(branch).toContain(":/opt/workspace suculent/mongoose-docker-build");
+        expect(branch).not.toContain("/opt/mongoose-builder");
+    });
+
     test.each(SHELLS)("builder and builder-lib.sh parse under %s", (...shell) => {
         const args = shell.slice(1).concat(["-n"]);
         expect(child_process.spawnSync(shell[0], args.concat([BUILDER])).status).toBe(0);
