@@ -791,7 +791,7 @@ case $PLATFORM in
 
 			if [[ -z "$THINX_FILE" ]];
 			then
-				echo "[arduino] WARNING! No THiNX-File found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
+				echo "[arduino] WARNING! No thinx.h file found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
 				# exit 1 # will deprecate on modularization for more platforms
 			else
 				#echo "[arduino] Using THiNX-File: ${THINX_FILE/$(pwd)//}" | tee -a "${LOG_PATH}"
@@ -917,7 +917,7 @@ case $PLATFORM in
 
 			if [[ -z $THINX_FILE ]];
 			then
-				echo "[pine64] WARNING! No THiNX-File found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
+				echo "[pine64] WARNING! No thinx.h file found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
 				# exit 1 # will deprecate on modularization for more platforms
 			else
 				#echo "[pine64] Using THiNX-File: ${THINX_FILE/$(pwd)//}" | tee -a "${LOG_PATH}"
@@ -1047,7 +1047,7 @@ case $PLATFORM in
 
 			if [[ -z "$THINX_FILE" ]];
 			then
-				echo "[platformio] WARNING! No THiNX-File found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
+				echo "[platformio] WARNING! No thinx.h file found! in $BUILD_PATH/$REPO_NAME: $THINX_FILE" | tee -a "${LOG_PATH}"
 				# exit 1 # will deprecate on modularization for more platforms
 			else
 				#echo "[platformio] Using THiNX-File: ${THINX_FILE/$(pwd)//}" | tee -a "${LOG_PATH}"
