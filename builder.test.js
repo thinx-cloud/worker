@@ -797,6 +797,21 @@ describe("builder wiring", () => {
         expect(branch).not.toContain("/opt/mongoose-builder");
     });
 
+    test("the mongoose branch decides success after both the docker and the swarm path", () => {
+        const start = builder.indexOf("\n    mongoose)\n");
+        const end = builder.indexOf("\n\t\tarduino)\n", start);
+        const branch = builder.slice(start, end).split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+        const swarm = branch.indexOf("swarmbuild $WORKDIR suculent/mongoose-docker-build");
+        const marker = branch.indexOf("grep 'THiNX BUILD SUCCESSFUL'");
+        const success = branch.indexOf("BUILD_SUCCESS=true");
+        expect(swarm).toBeGreaterThan(-1);
+        // The check must follow swarmbuild, i.e. sit outside the docker-run branch:
+        // inside it, every swarm build was recorded FAILED with a good fw.zip on disk.
+        expect(marker).toBeGreaterThan(swarm);
+        expect(success).toBeGreaterThan(marker);
+        expect(branch.match(/BUILD_SUCCESS=true/g)).toHaveLength(1);
+    });
+
     test.each(SHELLS)("builder and builder-lib.sh parse under %s", (...shell) => {
         const args = shell.slice(1).concat(["-n"]);
         expect(child_process.spawnSync(shell[0], args.concat([BUILDER])).status).toBe(0);

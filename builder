@@ -744,19 +744,26 @@ case $PLATFORM in
 				# tee is what puts "THiNX BUILD SUCCESSFUL" into the log grepped below.
 				$DCMD | tee -a "${LOG_PATH}"
 				echo "${PIPESTATUS[@]}"
-				if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
-				then
-					if [[ -f $(pwd)/build/fw.zip ]];
-					then
-						BUILD_SUCCESS=true
-						zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./build/* # zip artefacts
-					else
-						echo "OUTFILE not created." | tee -a "${LOG_PATH}"
-					fi
-				fi
 				echo "[mongoose] Docker completed <<<"
 			else
 				swarmbuild $WORKDIR suculent/mongoose-docker-build $LOG_PATH
+			fi
+
+			# Success is decided here for both paths: the entrypoint's marker line in
+			# the log plus the artefact on disk. It used to sit inside the docker-run
+			# branch only, so every swarm build -- the staging/production path -- left
+			# BUILD_SUCCESS false and was recorded FAILED ("Could not find outfile")
+			# although the container had printed THiNX BUILD SUCCESSFUL and written
+			# build/fw.zip.
+			if [[ ! -z "$(grep 'THiNX BUILD SUCCESSFUL' ${LOG_PATH})" ]];
+			then
+				if [[ -f $(pwd)/build/fw.zip ]];
+				then
+					BUILD_SUCCESS=true
+					zip -rq "${DEPLOYMENT_PATH}/${BUILD_ID}.zip" ${LOG_PATH} ./build/* # zip artefacts
+				else
+					echo "OUTFILE not created." | tee -a "${LOG_PATH}"
+				fi
 			fi
 
 			# Exit on dry run...
