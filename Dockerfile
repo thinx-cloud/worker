@@ -48,7 +48,10 @@ ENV DATA_PATH=${DATA_PATH}
 
 WORKDIR /opt/thinx/thinx-device-api
 
-RUN apk update && apk upgrade
+# Fails the build if Node.js is below 26.12.1, the fix for CVE-2026-111497
+# (HTTP2Shell, an out-of-bounds write in the bundled Brotli decoder).
+RUN apk update && apk upgrade \
+    && [ "$(apk version -t "$(node -p process.versions.node)" 26.12.1)" != "<" ]
 
 COPY ./devsec-src ./devsec-src
 
