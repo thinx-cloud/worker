@@ -292,6 +292,47 @@ module.exports = class Worker {
         this.attachBuildHandlers(shell, owner, build_id, udid, path, socket, callback);
     }
 
+    // The build result on one stdout line, "[<build_id>] »» JOB-RESULT: {...}".
+    // The JSON starts at the first "{" after the marker -- never before it: the
+    // builder replays its whole log at the end, and compiler output in front of
+    // the marker carries braces of its own (production build
+    // cfea00b0-d9ea-11f1-805f-ff6b6d709f9e was marked failed that way).
+    // Returns null when the line has no marker, { ok: true, result } for a JSON
+    // object, else { ok: false, error } (never the line's content).
+    static parseJobResult(line) {
+        if (typeof (line) !== "string") return null;
+        const marker = line.indexOf("JOB-RESULT:");
+        if (marker === -1) return null;
+        const start = line.indexOf("{", marker);
+        if (start === -1) return { ok: false, error: "no JSON object" };
+        // The object ends at its matching brace (braces inside strings do not
+        // count); anything after it on the line is ignored.
+        let depth = 0, in_string = false, escaped = false, end = -1;
+        for (let i = start; i < line.length; i++) {
+            const c = line[i];
+            if (in_string) {
+                if (escaped) escaped = false;
+                else if (c === "\\") escaped = true;
+                else if (c === "\"") in_string = false;
+                continue;
+            }
+            if (c === "\"") in_string = true;
+            else if (c === "{") depth++;
+            else if ((c === "}") && (--depth === 0)) { end = i; break; }
+        }
+        if (end === -1) return { ok: false, error: "unterminated JSON object" };
+        let result;
+        try {
+            result = JSON.parse(line.slice(start, end + 1));
+        } catch (e) {
+            return { ok: false, error: "invalid JSON" };
+        }
+        if ((result === null) || (typeof (result) !== "object") || Array.isArray(result)) {
+            return { ok: false, error: "not a JSON object" };
+        }
+        return { ok: true, result: result };
+    }
+
     // Wires the build child process to the API: log streaming, JOB-RESULT parsing,
     // the build.log append, the Failed status on a non-zero exit, the socket
     // disconnect and the release of the running guard. Shared by runShell (legacy
@@ -300,57 +341,68 @@ module.exports = class Worker {
 
         let build_start = new Date().getTime();
 
+        // One build result per build. The builder prints its JOB-RESULT line
+        // and, at the end, replays the whole log, so the line is seen again.
+        // Only the first result that parses is sent; see Worker.parseJobResult.
+        let result_sent = false;
+        // stdout arrives in arbitrary chunks: a JOB-RESULT line can be split
+        // between two of them. Results are read from whole lines only; this
+        // holds the unterminated tail of the last chunk.
+        let pending_line = "";
+
+        const sendResult = (line) => {
+            if (result_sent) return;
+            const parsed = Worker.parseJobResult(line);
+            if (parsed === null) return;
+            if (parsed.ok !== true) {
+                // Never report a failure because a result line did not parse:
+                // the exit handler decides when no result was sent.
+                console.log(`[error] JOB-RESULT annotation not parsed (${parsed.error}), ${line.length} chars; waiting for the exit code.`);
+                return;
+            }
+
+            const status_object = parsed.result;
+            if (typeof (status_object.build_id) !== "string") status_object.build_id = build_id;
+
+            let elapsed_hr;
+            let build_time = (new Date().getTime() - build_start)/1000; // to seconds
+            if (build_time < 60) {
+                elapsed_hr = build_time + " seconds";
+            } else {
+                let minutes = Math.floor(build_time/60);
+                let seconds = Math.floor(build_time % 60);
+                elapsed_hr = minutes + " minutes " + seconds + " seconds";
+            }
+
+            console.log(`[info] BUILD TIME: ${elapsed_hr}`);
+
+            status_object.elapsed = build_time;
+            status_object.elapsed_hr = elapsed_hr;
+
+            status_object.completed = true;
+            result_sent = true;
+            socket.emit('job-status', status_object); // should be called job-result everywhere, always indiates completion
+        };
+
+        const scanForResult = (text, flush) => {
+            const lines = (pending_line + text).split("\n");
+            pending_line = flush ? "" : lines.pop();
+            for (const line of lines) {
+                if (line.indexOf("JOB-RESULT") !== -1) sendResult(line);
+            }
+        };
+
 		shell.stdout.on("data", (data) => {
 			var string = data.toString();
             var logline = string;
-            
+
             logline = logline.replace(/\r\r/g, '');
 			logline = logline.replace(/\n\n/g, '');
 
+            scanForResult(string, false);
+
 			if (logline.length > 1) {
                 console.log(logline);
-
-				if (logline.indexOf("JOB-RESULT") !== -1) {
-                    
-                    // parses "[86ad8d90-46e8-11eb-a48a-b59a7e739f77] »» JOB-RESULT:" {...
-                    let start_pos = logline.indexOf("{");
-                    let annotation_string = logline.substr(start_pos);
-
-                    let status_object = {
-                        udid: udid,
-                        state: "Failed",
-                        build_id: build_id, 
-                        owner: owner
-                    };
-
-                    try {
-                        let annotation_json = JSON.parse(annotation_string);
-                        status_object = annotation_json;
-                        
-                    } catch (e) {
-                        console.log(`[error] Annotation status in '${annotation_string}' not parsed.`);
-                    }
-
-                    let elapsed_hr;
-                    let build_time = (new Date().getTime() - build_start)/1000; // to seconds
-                    if (build_time < 60) {
-                        elapsed_hr = build_time + " seconds";
-                    } else {
-                        let minutes = Math.floor(build_time/60);
-                        let seconds = Math.floor(build_time % 60);
-                        elapsed_hr = minutes + " minutes " + seconds + " seconds";
-                    }
-
-                    console.log(`[info] BUILD TIME: ${elapsed_hr}`);
-
-                    status_object.elapsed = build_time;
-                    status_object.elapsed_hr = elapsed_hr;
-                    
-                    status_object.completed = true;
-                    socket.emit('job-status', status_object); // should be called job-result everywhere, always indiates completion
-
-                    // calculate build time
-				}
             }
 
             // Something must write to build_path/build.log where the file is tailed from to websocket...
@@ -420,12 +472,25 @@ module.exports = class Worker {
             console.log(`[OID:${owner}] [BUILD_COMPLETED] with code ${code}`);
             this.running = false;
 
+            // A JOB-RESULT on the last line without a trailing newline.
+            scanForResult("", true);
+
             if (code > 0) {
                 socket.emit('job-status', {
                     udid: udid,
-                    build_id: build_id, 
+                    build_id: build_id,
                     state: "Failed",
                     reason: dstring
+                });
+            } else if (!result_sent) {
+                // Exit 0 without a readable JOB-RESULT: the API would wait for a
+                // result that never comes, so this is the one place a missing
+                // result becomes a failure.
+                socket.emit('job-status', {
+                    udid: udid,
+                    build_id: build_id,
+                    state: "Failed",
+                    reason: "no build result"
                 });
             }
 

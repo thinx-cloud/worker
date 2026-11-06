@@ -839,3 +839,96 @@ describe("Rollbar server token (SEC-CFG-02, D-03)", () => {
         }
     });
 });
+
+// One build result per build (production build cfea00b0-d9ea-11f1-805f-ff6b6d709f9e,
+// 2026-11-06). The builder prints JOB-RESULT and later replays its whole log; a replay chunk
+// with compiler braces in front of the marker used to fail to parse, and the worker then sent
+// a "Failed" result that overwrote the build's Success on the API.
+describe("JOB-RESULT handling", () => {
+
+    const os = require("os");
+    const BUILD_ID = "cfea00b0-d9ea-11f1-805f-ff6b6d709f9e";
+    const RESULT = { build_id: BUILD_ID, udid: "u1", status: "OK", outfile: "firmware.bin", commit: "abc" };
+    const resultLine = (obj) => "[" + BUILD_ID + "] »» JOB-RESULT: " + JSON.stringify(obj);
+
+    describe("Worker.parseJobResult", () => {
+        test("reads the object after the marker, not braces before it", () => {
+            const line = "lib/MQTT.cpp:126: warning: switch { case } " + resultLine(RESULT) + " trailing text {";
+            expect(Worker.parseJobResult(line)).toEqual({ ok: true, result: RESULT });
+        });
+
+        test("braces inside JSON strings do not end the object", () => {
+            const obj = { build_id: BUILD_ID, status: "OK", note: "a } b { c" };
+            expect(Worker.parseJobResult(resultLine(obj))).toEqual({ ok: true, result: obj });
+        });
+
+        test.each([
+            ["no marker", "plain build output {\"status\":\"OK\"}", null],
+            ["no object", "JOB-RESULT: none", { ok: false, error: "no JSON object" }],
+            ["cut off", "JOB-RESULT: {\"status\":\"OK\"", { ok: false, error: "unterminated JSON object" }],
+            ["invalid JSON", "JOB-RESULT: {status: OK}", { ok: false, error: "invalid JSON" }],
+            ["not a string", 42, null],
+        ])("%s", (_label, line, expected) => {
+            expect(Worker.parseJobResult(line)).toEqual(expected);
+        });
+    });
+
+    describe("attachBuildHandlers", () => {
+        let dir, worker, shell, sock, logSpy;
+
+        beforeEach(() => {
+            dir = fs.mkdtempSync(require("path").join(os.tmpdir(), "worker-result-"));
+            worker = Object.create(Worker.prototype);
+            shell = new EventEmitter();
+            shell.stdout = new EventEmitter();
+            shell.stderr = new EventEmitter();
+            sock = { emit: jest.fn(), disconnect: jest.fn() };
+            logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+            worker.attachBuildHandlers(shell, "owner", BUILD_ID, "u1", dir, sock, undefined);
+        });
+
+        afterEach(() => {
+            logSpy.mockRestore();
+            fs.rmSync(dir, { recursive: true, force: true });
+        });
+
+        const statuses = () => sock.emit.mock.calls.filter((c) => c[0] === "job-status").map((c) => c[1]);
+
+        test("the reported sequence: result, unparseable replay, exit 0 sends exactly one OK result", () => {
+            shell.stdout.emit("data", Buffer.from("[builder] Build Stage completed with status: OK\n" + resultLine(RESULT) + "\n"));
+            shell.stdout.emit("data", Buffer.from("thinx_build | lib/x.cpp:1: warning: {\n" + "[" + BUILD_ID + "] »» JOB-RESULT: {\"status\":\"OK\"\n"));
+            shell.stdout.emit("data", Buffer.from(resultLine(RESULT) + "\n"));
+            shell.emit("exit", 0);
+
+            expect(statuses().length).toBe(1);
+            expect(statuses()[0]).toMatchObject({ status: "OK", build_id: BUILD_ID, completed: true });
+        });
+
+        test("a result line split across two chunks is read whole", () => {
+            const line = resultLine(RESULT);
+            shell.stdout.emit("data", Buffer.from(line.slice(0, 30)));
+            shell.stdout.emit("data", Buffer.from(line.slice(30) + "\n"));
+            shell.emit("exit", 0);
+            expect(statuses()).toEqual([expect.objectContaining({ status: "OK", completed: true })]);
+        });
+
+        test("a last result line without a newline is read at exit", () => {
+            shell.stdout.emit("data", Buffer.from(resultLine(RESULT)));
+            shell.emit("exit", 0);
+            expect(statuses()).toEqual([expect.objectContaining({ status: "OK", completed: true })]);
+        });
+
+        test("an unparseable result alone sends no Failed result; exit 0 then reports the missing result", () => {
+            shell.stdout.emit("data", Buffer.from("[" + BUILD_ID + "] »» JOB-RESULT: {broken\n"));
+            expect(statuses()).toEqual([]);
+            shell.emit("exit", 0);
+            expect(statuses()).toEqual([{ udid: "u1", build_id: BUILD_ID, state: "Failed", reason: "no build result" }]);
+        });
+
+        test("a non-zero exit still reports Failed with the last stderr", () => {
+            shell.stderr.emit("data", Buffer.from("make: *** Error 1"));
+            shell.emit("exit", 2);
+            expect(statuses()).toEqual([{ udid: "u1", build_id: BUILD_ID, state: "Failed", reason: "make: *** Error 1" }]);
+        });
+    });
+});
